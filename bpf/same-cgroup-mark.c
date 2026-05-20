@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0 OR MIT
 
 #include <stdbool.h>
-#include <asm-generic/socket.h>
 #include <linux/bpf.h>
 #include <linux/in.h>
 #include <linux/socket.h>
@@ -13,6 +12,7 @@
 #define AF_INET6 10
 #define SOCK_STREAM 1
 #define SOL_SOCKET 1
+#define SO_MARK 36
 
 struct same_cgroup_mark_config {
 	__u32 mark_mask;

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -25,7 +26,10 @@ const (
 	bpfTimeout = 10 * time.Second
 )
 
-var errMustBeRoot = errors.New("must be run as root")
+var (
+	errMustBeRoot   = errors.New("must be run as root")
+	errMarkOverflow = errors.New("mark value exceeds 32-bit maximum (0xFFFFFFFF)")
+)
 
 type loadCmd struct {
 	Mark string `help:"Mark mask (e.g. 0x40000000)." short:"m"`
@@ -136,7 +140,7 @@ func cgroupAttach() []cgroupAttachEntry {
 	}
 }
 
-func setMark(mark uint) error {
+func setMark(mark uint32) error {
 	leBytes := markToLE(mark)
 
 	err := run("bpftool", "map", "update",
@@ -151,20 +155,23 @@ func setMark(mark uint) error {
 	return nil
 }
 
-func markToLE(mark uint) [4]string {
-	hex := fmt.Sprintf("%08x", uint32(mark))
+func markToLE(mark uint32) [4]string {
+	hex := fmt.Sprintf("%08x", mark)
 	return [4]string{hex[6:8], hex[4:6], hex[2:4], hex[0:2]}
 }
 
-func parseMark(s string) (uint, error) {
+func parseMark(s string) (uint32, error) {
 	s = strings.TrimPrefix(s, "0x")
 	s = strings.TrimPrefix(s, "0X")
-	var v uint
+	var v uint64
 	_, err := fmt.Sscanf(s, "%x", &v)
 	if err != nil {
 		return 0, fmt.Errorf("invalid mark value %q: %w", s, err)
 	}
-	return v, nil
+	if v > math.MaxUint32 {
+		return 0, fmt.Errorf("%w: 0x%X", errMarkOverflow, v)
+	}
+	return uint32(v), nil
 }
 
 func ensureBPFFS() error {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"math"
 	"os"
 	"testing"
 
@@ -30,7 +31,7 @@ func TestCLILoadWithMark(t *testing.T) {
 func TestParseMark(t *testing.T) {
 	tests := []struct {
 		input string
-		want  uint
+		want  uint32
 	}{
 		{"0x40000000", 0x40000000},
 		{"0x20000000", 0x20000000},
@@ -52,6 +53,23 @@ func TestParseMarkInvalid(t *testing.T) {
 	_, err := parseMark("not-a-number")
 	if err == nil {
 		t.Fatal("expected error for invalid mark")
+	}
+}
+
+func TestParseMarkOverflow(t *testing.T) {
+	_, err := parseMark("0x1FFFFFFFF")
+	if err == nil {
+		t.Fatal("expected error for overflow mark")
+	}
+}
+
+func TestParseMarkMaxUint32(t *testing.T) {
+	v, err := parseMark("0xFFFFFFFF")
+	if err != nil {
+		t.Fatal("unexpected error:", err)
+	}
+	if v != math.MaxUint32 {
+		t.Fatalf("expected %d, got %d", math.MaxUint32, v)
 	}
 }
 
@@ -93,14 +111,14 @@ func TestWriteTempBPFObj(t *testing.T) {
 
 func TestMarkToLE(t *testing.T) {
 	tests := []struct {
-		mark uint
+		mark uint32
 		want [4]string
 	}{
 		{0x40000000, [4]string{"00", "00", "00", "40"}},
 		{0x00000001, [4]string{"01", "00", "00", "00"}},
 		{0x10000000, [4]string{"00", "00", "00", "10"}},
-		{0x1FFFFFFFF, [4]string{"ff", "ff", "ff", "ff"}},
-		{0x1ABCDEF01, [4]string{"01", "ef", "cd", "ab"}},
+		{0xFFFFFFFF, [4]string{"ff", "ff", "ff", "ff"}},
+		{0xABCDEF01, [4]string{"01", "ef", "cd", "ab"}},
 	}
 	for _, tc := range tests {
 		got := markToLE(tc.mark)
