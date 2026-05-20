@@ -82,6 +82,7 @@ run = 'prettier --check "**/*.md"'
 
 [tasks.'lint:go']
 description = 'Lint Go files'
+depends = ['build:bpf']
 run = 'golangci-lint run'
 
 [tasks.'build:bpf']
@@ -89,7 +90,7 @@ description = 'Compile BPF object file'
 depends = ['cachedir']
 sources = ['bpf/same-cgroup-mark.c']
 outputs = ['.cache/same-cgroup-mark.bpf.o']
-run = 'clang -O2 -g -target bpf -I/usr/include -idirafter /usr/include/x86_64-linux-gnu -c bpf/same-cgroup-mark.c -o .cache/same-cgroup-mark.bpf.o'
+run = 'clang -O2 -g -target bpf -I/usr/include -idirafter "/usr/include/$(uname -m)-linux-gnu" -c bpf/same-cgroup-mark.c -o .cache/same-cgroup-mark.bpf.o'
 
 [tasks.'build:go']
 description = 'Build the Go binary'
