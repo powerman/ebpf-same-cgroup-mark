@@ -1,34 +1,29 @@
 package main
 
 import (
-	"math"
 	"os"
 	"testing"
 
 	"github.com/alecthomas/kong"
+	"github.com/powerman/check"
 )
 
-func TestCLILoadDefaults(t *testing.T) {
+func TestCLILoadDefaults(tt *testing.T) {
+	t := check.T(tt).MustAll()
 	cli, err := parseArgs("load")
-	if err != nil {
-		t.Fatal("unexpected error:", err)
-	}
-	if cli.Load.Mark != "" {
-		t.Fatalf("expected mark=\"\", got %q", cli.Load.Mark)
-	}
+	t.Nil(err)
+	t.Equal(cli.Load.Mark, "")
 }
 
-func TestCLILoadWithMark(t *testing.T) {
+func TestCLILoadWithMark(tt *testing.T) {
+	t := check.T(tt).MustAll()
 	cli, err := parseArgs("load", "-m", "0x40000000")
-	if err != nil {
-		t.Fatal("unexpected error:", err)
-	}
-	if cli.Load.Mark != "0x40000000" {
-		t.Fatalf("expected mark=\"0x40000000\", got %q", cli.Load.Mark)
-	}
+	t.Nil(err)
+	t.Equal(cli.Load.Mark, "0x40000000")
 }
 
-func TestParseMark(t *testing.T) {
+func TestParseMark(tt *testing.T) {
+	t := check.T(tt).MustAll()
 	tests := []struct {
 		input string
 		want  uint32
@@ -40,76 +35,57 @@ func TestParseMark(t *testing.T) {
 	}
 	for _, tc := range tests {
 		got, err := parseMark(tc.input)
-		if err != nil {
-			t.Fatalf("parseMark(%q): %v", tc.input, err)
-		}
-		if got != tc.want {
-			t.Fatalf("parseMark(%q) = %d, want %d", tc.input, got, tc.want)
-		}
+		t.Nil(err)
+		t.Equal(got, tc.want)
 	}
 }
 
-func TestParseMarkInvalid(t *testing.T) {
+func TestParseMarkInvalid(tt *testing.T) {
+	t := check.T(tt).MustAll()
 	_, err := parseMark("not-a-number")
-	if err == nil {
-		t.Fatal("expected error for invalid mark")
-	}
+	t.NotNil(err)
 }
 
-func TestParseMarkOverflow(t *testing.T) {
+func TestParseMarkOverflow(tt *testing.T) {
+	t := check.T(tt).MustAll()
 	_, err := parseMark("0x1FFFFFFFF")
-	if err == nil {
-		t.Fatal("expected error for overflow mark")
-	}
+	t.NotNil(err)
 }
 
-func TestParseMarkMaxUint32(t *testing.T) {
+func TestParseMarkMaxUint32(tt *testing.T) {
+	t := check.T(tt).MustAll()
 	v, err := parseMark("0xFFFFFFFF")
-	if err != nil {
-		t.Fatal("unexpected error:", err)
-	}
-	if v != math.MaxUint32 {
-		t.Fatalf("expected %d, got %d", math.MaxUint32, v)
-	}
+	t.Nil(err)
+	t.Equal(v, uint32(0xFFFFFFFF))
 }
 
-func TestCLIUnload(t *testing.T) {
+func TestCLIUnload(tt *testing.T) {
+	t := check.T(tt).MustAll()
 	_, err := parseArgs("unload")
-	if err != nil {
-		t.Fatal("unexpected error:", err)
-	}
+	t.Nil(err)
 }
 
-func TestCLIUnknownCommand(t *testing.T) {
+func TestCLIUnknownCommand(tt *testing.T) {
+	t := check.T(tt).MustAll()
 	_, err := parseArgs("reload")
-	if err == nil {
-		t.Fatal("expected error for unknown command")
-	}
+	t.NotNil(err)
 }
 
-func TestWriteTempBPFObj(t *testing.T) {
+func TestWriteTempBPFObj(tt *testing.T) {
+	t := check.T(tt).MustAll()
 	path, err := writeTempBPFObj()
-	if err != nil {
-		t.Fatal("writeTempBPFObj:", err)
-	}
+	t.Nil(err)
 	defer os.Remove(path)
 
 	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal("read temp file:", err)
-	}
+	t.Nil(err)
 
-	if len(data) != len(bpfObj) {
-		t.Fatalf("size mismatch: got %d, want %d", len(data), len(bpfObj))
-	}
-	for i := range data {
-		if data[i] != bpfObj[i] {
-			t.Fatalf("byte %d mismatch: got %02x, want %02x", i, data[i], bpfObj[i])
-		}
-	}
+	t.Equal(len(data), len(bpfObj))
+	t.DeepEqual(data, bpfObj)
 }
 
-func TestMarkToLE(t *testing.T) {
+func TestMarkToLE(tt *testing.T) {
+	t := check.T(tt).MustAll()
 	tests := []struct {
 		mark uint32
 		want [4]string
@@ -121,10 +97,7 @@ func TestMarkToLE(t *testing.T) {
 		{0xABCDEF01, [4]string{"01", "ef", "cd", "ab"}},
 	}
 	for _, tc := range tests {
-		got := markToLE(tc.mark)
-		if got != tc.want {
-			t.Fatalf("markToLE(0x%x) = %v, want %v", tc.mark, got, tc.want)
-		}
+		t.DeepEqual(markToLE(tc.mark), tc.want)
 	}
 }
 
