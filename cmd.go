@@ -1,5 +1,3 @@
-// Binary to load/unload eBPF program that sets SO_MARK on same-cgroup TCP
-// connections.
 package main
 
 import (
@@ -16,41 +14,36 @@ import (
 	"time"
 )
 
-// tempFile allows mocking [os.File] operations in writeTempBPFObj tests.
+//nolint:gochecknoglobals // Mockable dependencies for testing.
+var (
+	cmdOutput    = realCmdOutput
+	cmdRun       = realCmdRun
+	osCreateTemp = realOsCreateTemp
+	osGeteuid    = os.Geteuid
+	osMkdirAll   = os.MkdirAll
+	osRemoveAll  = os.RemoveAll
+	osStat       = os.Stat
+)
+
+func realCmdRun(ctx context.Context, name string, args ...string) error {
+	cmd := exec.CommandContext(ctx, name, args...) //nolint:gosec // False positive.
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+func realCmdOutput(name string, args ...string) ([]byte, error) {
+	return exec.CommandContext(context.Background(), name, args...).CombinedOutput() //nolint:gosec // False positive.
+}
+
+// tempFile allows mocking [os.File] operations in tests.
 type tempFile interface {
 	Write(p []byte) (n int, err error)
 	Close() error
 	Name() string
 }
 
-// Mockable dependencies for testing.
-//
-//nolint:gochecknoglobals // mockable dependencies for testing
-var (
-	cmdRun       = realCmdRun
-	cmdOutput    = realCmdOutput
-	osGeteuid    = os.Geteuid
-	osStat       = os.Stat
-	osRemoveAll  = os.RemoveAll
-	osMkdirAll   = os.MkdirAll
-	osCreateTemp = realOsCreateTemp
-)
-
-//nolint:gosec // args are controlled by the program, not user input
-func realCmdRun(ctx context.Context, name string, args ...string) error {
-	cmd := exec.CommandContext(ctx, name, args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
-}
-
-//nolint:gosec // args are controlled by the program, not user input
-func realCmdOutput(ctx context.Context, name string, args ...string) ([]byte, error) {
-	return exec.CommandContext(ctx, name, args...).CombinedOutput()
-}
-
-//nolint:iface // used for mocking in tests
-func realOsCreateTemp(dir, pattern string) (tempFile, error) {
+func realOsCreateTemp(dir, pattern string) (tempFile, error) { //nolint:iface // By design.
 	return os.CreateTemp(dir, pattern)
 }
 
@@ -221,15 +214,15 @@ func ensureBPFFS() error {
 	if err == nil {
 		return nil
 	}
-	out, err := cmdOutput(context.Background(), "mount", "-t", "bpf", "bpf", "/sys/fs/bpf")
+	out, err := cmdOutput("mount", "-t", "bpf", "bpf", "/sys/fs/bpf")
 	if err != nil {
-		return fmt.Errorf("mount bpffs: %w\n%s", err, out)
+		return fmt.Errorf("mount bpf: %w\n%s", err, out)
 	}
 	return nil
 }
 
 func writeTempBPFObj() (string, error) {
-	f, err := osCreateTemp("", "same-cgroup-mark-*.bpf.o")
+	f, err := osCreateTemp("", "same-cgroup-mark.*.bpf.o")
 	if err != nil {
 		return "", fmt.Errorf("create temp file: %w", err)
 	}

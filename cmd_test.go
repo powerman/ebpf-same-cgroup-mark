@@ -273,7 +273,7 @@ func TestEnsureBPFFSMountSuccess(tt *testing.T) {
 		t.Equal(name, "mountpoint")
 		return errMockNotMounted
 	}
-	cmdOutput = func(_ context.Context, name string, _ ...string) ([]byte, error) {
+	cmdOutput = func(name string, _ ...string) ([]byte, error) {
 		t.Equal(name, "mount")
 		return nil, nil
 	}
@@ -289,13 +289,12 @@ func TestEnsureBPFFSMountError(tt *testing.T) {
 	cmdRun = func(_ context.Context, _ string, _ ...string) error {
 		return errMockNotMounted
 	}
-	cmdOutput = func(_ context.Context, _ string, _ ...string) ([]byte, error) {
+	cmdOutput = func(_ string, _ ...string) ([]byte, error) {
 		return []byte("mount failure details"), errMockMountFailed
 	}
 
 	err := ensureBPFFS()
-	t.NotNil(err)
-	t.True(strings.Contains(err.Error(), "mount bpffs"))
+	t.Match(err, "mount bpf")
 }
 
 func TestSetMarkSuccess(tt *testing.T) {
