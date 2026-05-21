@@ -17,7 +17,7 @@ func TestLoadCmdRun_LoadError(tt *testing.T) {
 	t.Parallel()
 
 	ctrl := gomock.NewController(tt)
-	a := main.NewMockApp(ctrl)
+	a := NewMockApp(ctrl)
 	a.EXPECT().Load().Return(errMockApp)
 
 	cmd := &main.LoadCmd{}
@@ -29,7 +29,7 @@ func TestLoadCmdRun_ParseMarkError(tt *testing.T) {
 	t.Parallel()
 
 	ctrl := gomock.NewController(tt)
-	a := main.NewMockApp(ctrl)
+	a := NewMockApp(ctrl)
 	a.EXPECT().Load().Return(nil)
 
 	cmd := &main.LoadCmd{Mark: "not-a-valid-mark"}
@@ -42,7 +42,7 @@ func TestLoadCmdRun_SetMarkError(tt *testing.T) {
 	t.Parallel()
 
 	ctrl := gomock.NewController(tt)
-	a := main.NewMockApp(ctrl)
+	a := NewMockApp(ctrl)
 	a.EXPECT().Load().Return(nil)
 	a.EXPECT().SetMark(uint32(0x40000000)).Return(errMockApp)
 
@@ -55,7 +55,7 @@ func TestLoadCmdRun_Success(tt *testing.T) {
 	t.Parallel()
 
 	ctrl := gomock.NewController(tt)
-	a := main.NewMockApp(ctrl)
+	a := NewMockApp(ctrl)
 	a.EXPECT().Load().Return(nil)
 
 	cmd := &main.LoadCmd{Mark: ""}
@@ -67,7 +67,7 @@ func TestLoadCmdRun_SuccessWithMark(tt *testing.T) {
 	t.Parallel()
 
 	ctrl := gomock.NewController(tt)
-	a := main.NewMockApp(ctrl)
+	a := NewMockApp(ctrl)
 	a.EXPECT().Load().Return(nil)
 	a.EXPECT().SetMark(uint32(0x40000000)).Return(nil)
 
@@ -80,7 +80,7 @@ func TestUnloadCmdRun_UnloadError(tt *testing.T) {
 	t.Parallel()
 
 	ctrl := gomock.NewController(tt)
-	a := main.NewMockApp(ctrl)
+	a := NewMockApp(ctrl)
 	a.EXPECT().Unload().Return(errMockApp)
 
 	cmd := &main.UnloadCmd{}
@@ -92,7 +92,7 @@ func TestUnloadCmdRun_Success(tt *testing.T) {
 	t.Parallel()
 
 	ctrl := gomock.NewController(tt)
-	a := main.NewMockApp(ctrl)
+	a := NewMockApp(ctrl)
 	a.EXPECT().Unload().Return(nil)
 
 	cmd := &main.UnloadCmd{}

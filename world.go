@@ -1,4 +1,4 @@
-//go:generate mise exec -- mockgen -package=$GOPACKAGE -source=$GOFILE -destination=mock.$GOFILE -write_package_comment=false
+//go:generate mise exec -- sh -c "mockgen -package=\"${DOLLAR}1_test\" -source=\"${DOLLAR}2\" -destination=\"mock.$(basename \"${DOLLAR}2\" .go)_test.go\"" _ $GOPACKAGE $GOFILE
 
 //nolint:godoclint // Thin wrappers over standard library functions.
 package main
