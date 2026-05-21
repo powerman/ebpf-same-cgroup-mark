@@ -120,7 +120,6 @@ func TestWriteTempBPFObj(tt *testing.T) {
 	data, err := os.ReadFile(path)
 	t.Nil(err)
 
-	t.Equal(len(data), len(bpfObj))
 	t.DeepEqual(data, bpfObj)
 }
 
@@ -133,8 +132,7 @@ func TestWriteTempBPFObjCreateTempError(tt *testing.T) {
 	}
 
 	_, err := writeTempBPFObj()
-	t.NotNil(err)
-	t.True(strings.Contains(err.Error(), "create temp file"))
+	t.Match(err, "create temp file")
 }
 
 func TestWriteTempBPFObjWriteError(tt *testing.T) {
@@ -146,8 +144,7 @@ func TestWriteTempBPFObjWriteError(tt *testing.T) {
 	}
 
 	_, err := writeTempBPFObj()
-	t.NotNil(err)
-	t.True(strings.Contains(err.Error(), "write temp file"))
+	t.Match(err, "write temp file")
 }
 
 func TestWriteTempBPFObjCloseError(tt *testing.T) {
@@ -159,8 +156,7 @@ func TestWriteTempBPFObjCloseError(tt *testing.T) {
 	}
 
 	_, err := writeTempBPFObj()
-	t.NotNil(err)
-	t.True(strings.Contains(err.Error(), "close temp file"))
+	t.Match(err, "close temp file")
 }
 
 func TestMarkToLE(tt *testing.T) {
@@ -183,7 +179,7 @@ func TestMarkToLE(tt *testing.T) {
 func TestCgroupAttach(tt *testing.T) {
 	t := check.T(tt).MustAll()
 	entries := cgroupAttach()
-	t.Equal(len(entries), 4)
+	t.Len(entries, 4)
 	t.Equal(entries[0], cgroupAttachEntry{"same_cgroup_bind4", "cgroup_inet4_bind"})
 	t.Equal(entries[1], cgroupAttachEntry{"same_cgroup_bind6", "cgroup_inet6_bind"})
 	t.Equal(entries[2], cgroupAttachEntry{"same_cgroup_connect4", "cgroup_inet4_connect"})
@@ -247,8 +243,7 @@ func TestEnsureBPFFSMkdirError(tt *testing.T) {
 	}
 
 	err := ensureBPFFS()
-	t.NotNil(err)
-	t.True(strings.Contains(err.Error(), errMockMkdir.Error()))
+	t.Match(err, errMockMkdir.Error())
 }
 
 func TestEnsureBPFFSAlreadyMounted(tt *testing.T) {
@@ -320,8 +315,7 @@ func TestSetMarkError(tt *testing.T) {
 	}
 
 	err := setMark(0x40000000)
-	t.NotNil(err)
-	t.True(strings.Contains(err.Error(), "set mark"))
+	t.Match(err, "set mark")
 }
 
 func TestUnloadNotExists(tt *testing.T) {
@@ -358,7 +352,7 @@ func TestUnloadExists(tt *testing.T) {
 	}
 
 	t.Nil(unload())
-	t.Equal(len(detachCalls), 4)
+	t.Len(detachCalls, 4)
 	t.Equal(removedPath, pinDir)
 }
 
@@ -385,8 +379,7 @@ func TestLoadRunEnsureBPFFSError(tt *testing.T) {
 
 	cmd := &loadCmd{}
 	err := cmd.Run()
-	t.NotNil(err)
-	t.True(strings.Contains(err.Error(), errMockMkdir.Error()))
+	t.Match(err, errMockMkdir.Error())
 }
 
 func TestLoadRunWriteTempBPFObjError(tt *testing.T) {
@@ -401,8 +394,7 @@ func TestLoadRunWriteTempBPFObjError(tt *testing.T) {
 
 	cmd := &loadCmd{}
 	err := cmd.Run()
-	t.NotNil(err)
-	t.True(strings.Contains(err.Error(), errMockMkdir.Error()))
+	t.Match(err, errMockMkdir.Error())
 }
 
 func TestLoadRunBPFToolLoadallError(tt *testing.T) {
@@ -425,8 +417,7 @@ func TestLoadRunBPFToolLoadallError(tt *testing.T) {
 
 	cmd := &loadCmd{}
 	err := cmd.Run()
-	t.NotNil(err)
-	t.True(strings.Contains(err.Error(), "bpftool loadall"))
+	t.Match(err, "bpftool loadall")
 }
 
 func TestLoadRunAttachError(tt *testing.T) {
@@ -449,8 +440,7 @@ func TestLoadRunAttachError(tt *testing.T) {
 
 	cmd := &loadCmd{}
 	err := cmd.Run()
-	t.NotNil(err)
-	t.True(strings.Contains(err.Error(), "attach"))
+	t.Match(err, "attach")
 }
 
 func TestLoadRunCleanupPinDirError(tt *testing.T) {
@@ -470,8 +460,7 @@ func TestLoadRunCleanupPinDirError(tt *testing.T) {
 
 	cmd := &loadCmd{}
 	err := cmd.Run()
-	t.NotNil(err)
-	t.True(strings.Contains(err.Error(), "cleanup old pin dir"))
+	t.Match(err, "cleanup old pin dir")
 }
 
 func TestLoadRunParseMarkError(tt *testing.T) {
@@ -486,8 +475,7 @@ func TestLoadRunParseMarkError(tt *testing.T) {
 
 	cmd := &loadCmd{Mark: "not-a-valid-mark"}
 	err := cmd.Run()
-	t.NotNil(err)
-	t.True(strings.Contains(err.Error(), "invalid mark value"))
+	t.Match(err, "invalid mark value")
 }
 
 func TestLoadRunSetMarkError(tt *testing.T) {
@@ -510,8 +498,7 @@ func TestLoadRunSetMarkError(tt *testing.T) {
 
 	cmd := &loadCmd{Mark: "0x40000000"}
 	err := cmd.Run()
-	t.NotNil(err)
-	t.True(strings.Contains(err.Error(), "set mark"))
+	t.Match(err, "set mark")
 }
 
 func TestLoadRunSuccess(tt *testing.T) {
