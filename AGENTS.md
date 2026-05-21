@@ -126,11 +126,13 @@ NOTE: The above example does not mean you should break into very short lines as 
   Mock external dependencies (OS, exec) and test your logic, not the underlying library.
 - Use an **external test package** (`package xxx_test`), including main package.
 - Name test functions as `TestFunc_Variant`, `TestTypeMethod_Variant` (`_Variant` optional).
+- Place test functions in same order as tested code.
 - Use `github.com/powerman/check` for assertions,
-  begin most tests with `t := check.T(tt).MustAll()`,
+  begin most tests with `tt.Parallel()` and `t := check.T(tt).MustAll()`,
   use shortcut methods when available instead of `t.True(complex expression)`
   (e.g. `t.Nil(err)`, `t.Match(err, "substr")`, `t.Len(res)`, etc.
 - Generate mocks with `go.uber.org/mock/mockgen` using `//go:generate` in a file with interface:
+- Extensively use test helpers to reduce code duplication within and between tests.
 
   ```go
   //go:generate mise exec -- sh -c "mockgen -package=\"${DOLLAR}1_test\" -source=\"${DOLLAR}2\" -destination=\"mock.$(basename \"${DOLLAR}2\" .go)_test.go\"" _ $GOPACKAGE $GOFILE

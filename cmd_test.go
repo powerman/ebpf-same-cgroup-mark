@@ -14,26 +14,36 @@ import (
 
 var errMockApp = errors.New("mock app error")
 
+// kongParse parses command-line arguments using Kong for testing.
+func kongParse(t *check.C, args ...string) (ctx *kong.Context, cli main.CLI, err error) {
+	t.Helper()
+	k, err := kong.New(&cli,
+		kong.Writers(io.Discard, io.Discard),
+		kong.Exit(func(int) {}),
+	)
+	if err != nil {
+		return nil, cli, err
+	}
+	ctx, err = k.Parse(args)
+	return ctx, cli, err
+}
+
+// kongRun parses command-line arguments using Kong, binds the App, and runs the command.
+func kongRun(t *check.C, a main.App, args ...string) error {
+	t.Helper()
+	ctx, _, err := kongParse(t, args...)
+	t.Nil(err)
+	ctx.BindTo(a, (*main.App)(nil))
+	return ctx.Run()
+}
+
 func TestLoadCmd_Mark(t *testing.T) {
 	t.Parallel()
-
-	parse := func(t *check.C, args ...string) (cli main.CLI, err error) {
-		t.Helper()
-		k, err := kong.New(&cli,
-			kong.Writers(io.Discard, io.Discard),
-			kong.Exit(func(int) {}),
-		)
-		if err != nil {
-			return cli, err
-		}
-		_, err = k.Parse(args)
-		return cli, err
-	}
 
 	t.Run("NotProvided", func(tt *testing.T) {
 		tt.Parallel()
 		t := check.T(tt).MustAll()
-		cli, err := parse(t, "load")
+		_, cli, err := kongParse(t, "load")
 		t.Nil(err)
 		t.Nil(cli.Load.Mark)
 	})
@@ -41,7 +51,7 @@ func TestLoadCmd_Mark(t *testing.T) {
 	t.Run("Valid", func(tt *testing.T) {
 		tt.Parallel()
 		t := check.T(tt).MustAll()
-		cli, err := parse(t, "load", "--mark", "0x20000000")
+		_, cli, err := kongParse(t, "load", "--mark", "0x20000000")
 		t.Nil(err)
 		t.DeepEqual(cli.Load.Mark, new(main.Mark(0x20000000)))
 	})
@@ -49,106 +59,75 @@ func TestLoadCmd_Mark(t *testing.T) {
 	t.Run("Invalid", func(tt *testing.T) {
 		tt.Parallel()
 		t := check.T(tt).MustAll()
-		_, err := parse(t, "load", "--mark", "invalid")
+		_, _, err := kongParse(t, "load", "--mark", "invalid")
 		t.Match(err, "invalid mark value")
 	})
 }
 
-func TestLoadCmdRun_LoadError(tt *testing.T) {
-	t := check.T(tt).MustAll()
+func TestCmd(t *testing.T) {
 	t.Parallel()
 
-	ctrl := gomock.NewController(t)
-	a := NewMockApp(ctrl)
-	a.EXPECT().Load().Return(errMockApp)
-
-	cmd := &main.LoadCmd{}
-	t.Equal(cmd.Run(a), errMockApp)
-}
-
-func TestLoadCmdRun_SetMarkError(tt *testing.T) {
-	t := check.T(tt).MustAll()
-	t.Parallel()
-
-	ctrl := gomock.NewController(t)
-	a := NewMockApp(ctrl)
-	a.EXPECT().Load().Return(nil)
-	a.EXPECT().SetMark(main.Mark(0x40000000)).Return(errMockApp)
-
-	mark := main.Mark(0x40000000)
-	cmd := &main.LoadCmd{Mark: &mark}
-	t.Equal(cmd.Run(a), errMockApp)
-}
-
-func TestLoadCmdRun_Success(tt *testing.T) {
-	t := check.T(tt).MustAll()
-	t.Parallel()
-
-	ctrl := gomock.NewController(t)
-	a := NewMockApp(ctrl)
-	a.EXPECT().Load().Return(nil)
-
-	cmd := &main.LoadCmd{}
-	t.Nil(cmd.Run(a))
-}
-
-func TestLoadCmdRun_SuccessWithMark(tt *testing.T) {
-	t := check.T(tt).MustAll()
-	t.Parallel()
-
-	ctrl := gomock.NewController(t)
-	a := NewMockApp(ctrl)
-	a.EXPECT().Load().Return(nil)
-	a.EXPECT().SetMark(main.Mark(0x40000000)).Return(nil)
-
-	mark := main.Mark(0x40000000)
-	cmd := &main.LoadCmd{Mark: &mark}
-	t.Nil(cmd.Run(a))
-}
-
-func TestLoadCmdRun_WithKongBind(tt *testing.T) {
-	t := check.T(tt).MustAll()
-	t.Parallel()
-
-	ctrl := gomock.NewController(t)
-	a := NewMockApp(ctrl)
-	a.EXPECT().Load().Return(nil)
-	a.EXPECT().SetMark(main.Mark(0x40000000)).Return(nil)
-
-	var cli main.CLI
-	k, err := kong.New(&cli,
-		kong.Writers(io.Discard, io.Discard),
-		kong.Exit(func(int) {}),
-	)
-	t.Nil(err)
-	ctx, err := k.Parse([]string{"load", "--mark", "0x40000000"})
-	t.Nil(err)
-
-	ctx.BindTo(a, (*main.App)(nil))
-	err = ctx.Run()
-	t.Nil(err)
-}
-
-func TestUnloadCmdRun_UnloadError(tt *testing.T) {
-	t := check.T(tt).MustAll()
-	t.Parallel()
-
-	ctrl := gomock.NewController(t)
-	a := NewMockApp(ctrl)
-	a.EXPECT().Unload().Return(errMockApp)
-
-	cmd := &main.UnloadCmd{}
-	t.Equal(cmd.Run(a), errMockApp)
-}
-
-func TestUnloadCmdRun_Success(tt *testing.T) {
-	t := check.T(tt).MustAll()
-	t.Parallel()
-
-	ctrl := gomock.NewController(t)
-	a := NewMockApp(ctrl)
-	a.EXPECT().Unload().Return(nil)
-
-	cmd := &main.UnloadCmd{}
-	t.Nil(cmd.Run(a))
+	tests := []struct {
+		name    string
+		args    []string
+		expect  func(a *MockApp)
+		wantErr error
+	}{
+		{
+			name: "LoadError",
+			args: []string{"load"},
+			expect: func(a *MockApp) {
+				a.EXPECT().Load().Return(errMockApp)
+			},
+			wantErr: errMockApp,
+		},
+		{
+			name: "LoadSetMarkError",
+			args: []string{"load", "--mark", "0x10000000"},
+			expect: func(a *MockApp) {
+				a.EXPECT().Load().Return(nil)
+				a.EXPECT().SetMark(main.Mark(0x10000000)).Return(errMockApp)
+			},
+			wantErr: errMockApp,
+		},
+		{
+			name: "LoadSuccess",
+			args: []string{"load"},
+			expect: func(a *MockApp) {
+				a.EXPECT().Load().Return(nil)
+			},
+		},
+		{
+			name: "LoadWithMarkSuccess",
+			args: []string{"load", "--mark", "0x10000000"},
+			expect: func(a *MockApp) {
+				a.EXPECT().Load().Return(nil)
+				a.EXPECT().SetMark(main.Mark(0x10000000)).Return(nil)
+			},
+		},
+		{
+			name: "UnloadError",
+			args: []string{"unload"},
+			expect: func(a *MockApp) {
+				a.EXPECT().Unload().Return(errMockApp)
+			},
+			wantErr: errMockApp,
+		},
+		{
+			name: "UnloadSuccess",
+			args: []string{"unload"},
+			expect: func(a *MockApp) {
+				a.EXPECT().Unload().Return(nil)
+			},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(tt *testing.T) {
+			tt.Parallel()
+			t := check.T(tt).MustAll()
+			a := NewMockApp(gomock.NewController(t))
+			tc.expect(a)
+			t.Err(kongRun(t, a, tc.args...), tc.wantErr)
+		})
+	}
 }

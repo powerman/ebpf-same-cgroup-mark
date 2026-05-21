@@ -8,15 +8,12 @@ type LoadCmd struct {
 // Run executes the LoadCmd.
 func (c *LoadCmd) Run(a App) error {
 	err := a.Load()
-	if err != nil {
-		return err
+
+	if err == nil && c.Mark != nil {
+		err = a.SetMark(*c.Mark)
 	}
 
-	if c.Mark != nil {
-		return a.SetMark(*c.Mark)
-	}
-
-	return nil
+	return err
 }
 
 // UnloadCmd detaches and unloads the eBPF program.

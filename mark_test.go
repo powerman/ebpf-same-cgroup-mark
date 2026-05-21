@@ -19,11 +19,11 @@ func TestMarkUnmarshalText(tt *testing.T) {
 	}{
 		{"0", 0, ""},
 		{"1234", 0x1234, ""},
-		{"40000000", 0x40000000, ""},
+		{"10000000", 0x10000000, ""},
 		{"0x000", 0, ""},
 		{"0x1", 1, ""},
 		{"0x20000000", 0x20000000, ""},
-		{"0x40000000", 0x40000000, ""},
+		{"0x10000000", 0x10000000, ""},
 		{"0xFFFFFFFF", 0xFFFFFFFF, ""},
 		{"0x1FFFFFFFF", 0, "mark value exceeds 32-bit maximum"},
 		{"not-a-number", 0, "invalid mark value"},
@@ -47,7 +47,7 @@ func TestMarkToLE(tt *testing.T) {
 		mark main.Mark
 		want [4]string
 	}{
-		{0x40000000, [4]string{"00", "00", "00", "40"}},
+		{0x00100000, [4]string{"00", "00", "10", "00"}},
 		{0x00000001, [4]string{"01", "00", "00", "00"}},
 		{0x10000000, [4]string{"00", "00", "00", "10"}},
 		{0xFFFFFFFF, [4]string{"ff", "ff", "ff", "ff"}},
