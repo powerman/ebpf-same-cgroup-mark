@@ -5,6 +5,9 @@
 Simple eBPF firewall helper: set `SO_MARK` on a TCP client socket
 when the destination listener socket lives in the same cgroup.
 
+The Go code in this repo is just a thin loader for the BPF program.
+The BPF program source lives in `bpf/same-cgroup-mark.c`.
+
 ### Tasks
 
 Use these commands for corresponding tasks:
@@ -62,6 +65,15 @@ Use these commands for corresponding tasks:
   If you cannot name the exact failure mode,
   do not add the code.
 
+### Golang CLI App Architecture
+
+- Use [Kong](https://github.com/alecthomas/kong) for CLI parsing.
+- Keep command handlers thin:
+  each command is a struct with a `Run(<App>) error` method.
+  The handler parses its own flags and delegates to App.
+- Minimize `main.go`:
+  define the CLI struct, parse with Kong, call `ctx.Run(app)`.
+
 ### Coding Standards
 
 #### Semantic Linefeeds (comments and documentation only)
@@ -100,7 +112,34 @@ NOTE: The above example does not mean you should break into very short lines as 
   add them into corresponding documentation files instead!
   Script comments may only refer docs on these topics, not duplicate or replace it.
 
-### Testing
+#### Golang Dependency Injection
+
+- Expose business logic through an `App` interface.
+- Inject external-world access (OS, exec, filesystem, outgoing adapters)
+  as an interface dependency of `App`,
+  so tests can mock all system calls.
+- The production implementation wraps real OS calls directly.
+
+### Golang Testing
 
 - Tests must only test the project's own code, not stdlib or third-party libraries.
   Mock external dependencies (OS, exec) and test your logic, not the underlying library.
+- Use an **external test package** (`package xxx_test`), including main package.
+- Name test functions as `TestFunc_Variant`, `TestTypeMethod_Variant` (`_Variant` optional).
+- Use `github.com/powerman/check` for assertions,
+  begin most tests with `t := check.T(tt).MustAll()`,
+  use shortcut methods when available instead of `t.True(complex expression)`
+  (e.g. `t.Nil(err)`, `t.Match(err, "substr")`, `t.Len(res)`, etc.
+- Generate mocks with `go.uber.org/mock/mockgen` using `//go:generate` in a file with interface:
+
+  ```go
+  //go:generate mise exec -- sh -c "mockgen -package=\"${DOLLAR}1_test\" -source=\"${DOLLAR}2\" -destination=\"mock.$(basename \"${DOLLAR}2\" .go)_test.go\"" _ $GOPACKAGE $GOFILE
+  ```
+
+- Use `go.uber.org/mock/gomock` for expectations:
+  `ctrl := gomock.NewController(t)`,
+  `mock.EXPECT().Method(args).Return(...)`.
+
+### Gotchas
+
+- If `mise.lock` does not exist, create it with `touch mise.lock`.
