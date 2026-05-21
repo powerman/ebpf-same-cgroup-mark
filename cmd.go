@@ -93,6 +93,56 @@ func (c *loadCmd) Run(world World) error {
 	return nil
 }
 
+func (c *loadCmd) setMark(mark uint32) error {
+	leBytes := markToLE(mark)
+
+	err := run(c.World, "bpftool", "map", "update",
+		"pinned", pinDir+"/maps/same_cgroup_mark_cfg",
+		"key", "hex", "00", "00", "00", "00",
+		"value", "hex", leBytes[0], leBytes[1], leBytes[2], leBytes[3],
+	)
+	if err != nil {
+		return fmt.Errorf("set mark: %w", err)
+	}
+	fmt.Printf("Mark mask set to 0x%08x\n", mark)
+	return nil
+}
+
+func (c *loadCmd) ensureBPFFS() error {
+	err := c.OsMkdirAll("/sys/fs/bpf", bpffsMode)
+	if err != nil {
+		return err
+	}
+	err = run(c.World, "mountpoint", "-q", "/sys/fs/bpf")
+	if err == nil {
+		return nil
+	}
+	out, err := c.CmdOutput("mount", "-t", "bpf", "bpf", "/sys/fs/bpf")
+	if err != nil {
+		return fmt.Errorf("mount bpf: %w\n%s", err, out)
+	}
+	return nil
+}
+
+func (c *loadCmd) writeTempBPFObj() (string, error) {
+	f, err := c.OsCreateTemp("", "same-cgroup-mark.*.bpf.o")
+	if err != nil {
+		return "", fmt.Errorf("create temp file: %w", err)
+	}
+	_, err = f.Write(bpfObj)
+	if err != nil {
+		_ = f.Close()
+		_ = os.Remove(f.Name())
+		return "", fmt.Errorf("write temp file: %w", err)
+	}
+	err = f.Close()
+	if err != nil {
+		_ = os.Remove(f.Name())
+		return "", fmt.Errorf("close temp file: %w", err)
+	}
+	return f.Name(), nil
+}
+
 type unloadCmd struct {
 	World
 }
@@ -145,21 +195,6 @@ func cgroupAttach() []cgroupAttachEntry {
 	}
 }
 
-func (c *loadCmd) setMark(mark uint32) error {
-	leBytes := markToLE(mark)
-
-	err := run(c.World, "bpftool", "map", "update",
-		"pinned", pinDir+"/maps/same_cgroup_mark_cfg",
-		"key", "hex", "00", "00", "00", "00",
-		"value", "hex", leBytes[0], leBytes[1], leBytes[2], leBytes[3],
-	)
-	if err != nil {
-		return fmt.Errorf("set mark: %w", err)
-	}
-	fmt.Printf("Mark mask set to 0x%08x\n", mark)
-	return nil
-}
-
 func markToLE(mark uint32) [4]string {
 	hex := fmt.Sprintf("%08x", mark)
 	return [4]string{hex[6:8], hex[4:6], hex[2:4], hex[0:2]}
@@ -177,41 +212,6 @@ func parseMark(s string) (uint32, error) {
 		return 0, fmt.Errorf("%w: 0x%X", errMarkOverflow, v)
 	}
 	return uint32(v), nil
-}
-
-func (c *loadCmd) ensureBPFFS() error {
-	err := c.OsMkdirAll("/sys/fs/bpf", bpffsMode)
-	if err != nil {
-		return err
-	}
-	err = run(c.World, "mountpoint", "-q", "/sys/fs/bpf")
-	if err == nil {
-		return nil
-	}
-	out, err := c.CmdOutput("mount", "-t", "bpf", "bpf", "/sys/fs/bpf")
-	if err != nil {
-		return fmt.Errorf("mount bpf: %w\n%s", err, out)
-	}
-	return nil
-}
-
-func (c *loadCmd) writeTempBPFObj() (string, error) {
-	f, err := c.OsCreateTemp("", "same-cgroup-mark.*.bpf.o")
-	if err != nil {
-		return "", fmt.Errorf("create temp file: %w", err)
-	}
-	_, err = f.Write(bpfObj)
-	if err != nil {
-		_ = f.Close()
-		_ = os.Remove(f.Name())
-		return "", fmt.Errorf("write temp file: %w", err)
-	}
-	err = f.Close()
-	if err != nil {
-		_ = os.Remove(f.Name())
-		return "", fmt.Errorf("close temp file: %w", err)
-	}
-	return f.Name(), nil
 }
 
 func run(w World, args ...string) error {
