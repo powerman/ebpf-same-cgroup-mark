@@ -1,4 +1,4 @@
-package main
+package main_test
 
 import (
 	"errors"
@@ -8,6 +8,8 @@ import (
 
 	"github.com/powerman/check"
 	"go.uber.org/mock/gomock"
+
+	main "github.com/powerman/ebpf-same-cgroup-mark"
 )
 
 // Package-level sentinel errors for mocks (err113 requires static errors).
@@ -47,7 +49,7 @@ func TestParseMark(tt *testing.T) {
 		{"40000000", 0x40000000},
 	}
 	for _, tc := range tests {
-		got, err := parseMark(tc.input)
+		got, err := main.ParseMark(tc.input)
 		t.Nil(err)
 		t.Equal(got, tc.want)
 	}
@@ -57,7 +59,7 @@ func TestParseMarkInvalid(tt *testing.T) {
 	t := check.T(tt).MustAll()
 	t.Parallel()
 
-	_, err := parseMark("not-a-number")
+	_, err := main.ParseMark("not-a-number")
 	t.NotNil(err)
 }
 
@@ -65,7 +67,7 @@ func TestParseMarkOverflow(tt *testing.T) {
 	t := check.T(tt).MustAll()
 	t.Parallel()
 
-	_, err := parseMark("0x1FFFFFFFF")
+	_, err := main.ParseMark("0x1FFFFFFFF")
 	t.NotNil(err)
 }
 
@@ -73,7 +75,7 @@ func TestParseMarkMaxUint32(tt *testing.T) {
 	t := check.T(tt).MustAll()
 	t.Parallel()
 
-	v, err := parseMark("0xFFFFFFFF")
+	v, err := main.ParseMark("0xFFFFFFFF")
 	t.Nil(err)
 	t.Equal(v, uint32(0xFFFFFFFF))
 }
@@ -82,15 +84,15 @@ func TestWriteTempBPFObj(tt *testing.T) {
 	t := check.T(tt).MustAll()
 	t.Parallel()
 
-	cmd := &loadCmd{World: &RealWorld{}}
-	path, err := cmd.writeTempBPFObj()
+	cmd := &main.LoadCmd{World: &main.RealWorld{}}
+	path, err := cmd.WriteTempBPFObj()
 	t.Nil(err)
 	defer os.Remove(path)
 
 	data, err := os.ReadFile(path)
 	t.Nil(err)
 
-	t.DeepEqual(data, bpfObj)
+	t.DeepEqual(data, main.BPFObj)
 }
 
 func TestWriteTempBPFObjCreateTempError(tt *testing.T) {
@@ -98,11 +100,11 @@ func TestWriteTempBPFObjCreateTempError(tt *testing.T) {
 	t.Parallel()
 
 	ctrl := gomock.NewController(tt)
-	w := NewMockWorld(ctrl)
+	w := main.NewMockWorld(ctrl)
 	w.EXPECT().OsCreateTemp(gomock.Any(), gomock.Any()).Return(nil, errMockMkdir)
 
-	cmd := &loadCmd{World: w}
-	_, err := cmd.writeTempBPFObj()
+	cmd := &main.LoadCmd{World: w}
+	_, err := cmd.WriteTempBPFObj()
 	t.Match(err, "create temp file")
 }
 
@@ -111,16 +113,16 @@ func TestWriteTempBPFObjWriteError(tt *testing.T) {
 	t.Parallel()
 
 	ctrl := gomock.NewController(tt)
-	w := NewMockWorld(ctrl)
-	tf := NewMockTempFile(ctrl)
+	w := main.NewMockWorld(ctrl)
+	tf := main.NewMockTempFile(ctrl)
 
 	w.EXPECT().OsCreateTemp(gomock.Any(), gomock.Any()).Return(tf, nil)
 	tf.EXPECT().Write(gomock.Any()).Return(0, errMockMkdir)
 	tf.EXPECT().Close().Return(nil)
 	tf.EXPECT().Name().Return("/tmp/test.bpf.o")
 
-	cmd := &loadCmd{World: w}
-	_, err := cmd.writeTempBPFObj()
+	cmd := &main.LoadCmd{World: w}
+	_, err := cmd.WriteTempBPFObj()
 	t.Match(err, "write temp file")
 }
 
@@ -129,16 +131,16 @@ func TestWriteTempBPFObjCloseError(tt *testing.T) {
 	t.Parallel()
 
 	ctrl := gomock.NewController(tt)
-	w := NewMockWorld(ctrl)
-	tf := NewMockTempFile(ctrl)
+	w := main.NewMockWorld(ctrl)
+	tf := main.NewMockTempFile(ctrl)
 
 	w.EXPECT().OsCreateTemp(gomock.Any(), gomock.Any()).Return(tf, nil)
-	tf.EXPECT().Write(gomock.Any()).Return(len(bpfObj), nil)
+	tf.EXPECT().Write(gomock.Any()).Return(len(main.BPFObj), nil)
 	tf.EXPECT().Close().Return(errMockMkdir)
 	tf.EXPECT().Name().Return("/tmp/test.bpf.o")
 
-	cmd := &loadCmd{World: w}
-	_, err := cmd.writeTempBPFObj()
+	cmd := &main.LoadCmd{World: w}
+	_, err := cmd.WriteTempBPFObj()
 	t.Match(err, "close temp file")
 }
 
@@ -157,7 +159,7 @@ func TestMarkToLE(tt *testing.T) {
 		{0xABCDEF01, [4]string{"01", "ef", "cd", "ab"}},
 	}
 	for _, tc := range tests {
-		t.DeepEqual(markToLE(tc.mark), tc.want)
+		t.DeepEqual(main.MarkToLE(tc.mark), tc.want)
 	}
 }
 
@@ -165,12 +167,12 @@ func TestCgroupAttach(tt *testing.T) {
 	t := check.T(tt).MustAll()
 	t.Parallel()
 
-	entries := cgroupAttach()
+	entries := main.CgroupAttach()
 	t.Len(entries, 4)
-	t.Equal(entries[0], cgroupAttachEntry{"same_cgroup_bind4", "cgroup_inet4_bind"})
-	t.Equal(entries[1], cgroupAttachEntry{"same_cgroup_bind6", "cgroup_inet6_bind"})
-	t.Equal(entries[2], cgroupAttachEntry{"same_cgroup_connect4", "cgroup_inet4_connect"})
-	t.Equal(entries[3], cgroupAttachEntry{"same_cgroup_connect6", "cgroup_inet6_connect"})
+	t.Equal(entries[0], main.CgroupAttachEntry{"same_cgroup_bind4", "cgroup_inet4_bind"})
+	t.Equal(entries[1], main.CgroupAttachEntry{"same_cgroup_bind6", "cgroup_inet6_bind"})
+	t.Equal(entries[2], main.CgroupAttachEntry{"same_cgroup_connect4", "cgroup_inet4_connect"})
+	t.Equal(entries[3], main.CgroupAttachEntry{"same_cgroup_connect6", "cgroup_inet6_connect"})
 }
 
 func TestRootCheckAsRoot(tt *testing.T) {
@@ -178,10 +180,10 @@ func TestRootCheckAsRoot(tt *testing.T) {
 	t.Parallel()
 
 	ctrl := gomock.NewController(tt)
-	w := NewMockWorld(ctrl)
+	w := main.NewMockWorld(ctrl)
 	w.EXPECT().OsGeteuid().Return(0)
 
-	t.Nil(rootCheck(w))
+	t.Nil(main.RootCheck(w))
 }
 
 func TestRootCheckAsNonRoot(tt *testing.T) {
@@ -189,10 +191,10 @@ func TestRootCheckAsNonRoot(tt *testing.T) {
 	t.Parallel()
 
 	ctrl := gomock.NewController(tt)
-	w := NewMockWorld(ctrl)
+	w := main.NewMockWorld(ctrl)
 	w.EXPECT().OsGeteuid().Return(1000)
 
-	t.Equal(rootCheck(w), errMustBeRoot)
+	t.Equal(main.RootCheck(w), main.ErrMustBeRoot)
 }
 
 func TestRunSuccess(tt *testing.T) {
@@ -200,10 +202,10 @@ func TestRunSuccess(tt *testing.T) {
 	t.Parallel()
 
 	ctrl := gomock.NewController(tt)
-	w := NewMockWorld(ctrl)
+	w := main.NewMockWorld(ctrl)
 	w.EXPECT().CmdRun(gomock.Any(), "echo", "hello", "world").Return(nil)
 
-	err := run(w, "echo", "hello", "world")
+	err := main.RunCmd(w, "echo", "hello", "world")
 	t.Nil(err)
 }
 
@@ -212,10 +214,10 @@ func TestRunError(tt *testing.T) {
 	t.Parallel()
 
 	ctrl := gomock.NewController(tt)
-	w := NewMockWorld(ctrl)
+	w := main.NewMockWorld(ctrl)
 	w.EXPECT().CmdRun(gomock.Any(), "false").Return(errMockCmd)
 
-	err := run(w, "false")
+	err := main.RunCmd(w, "false")
 	t.NotNil(err)
 }
 
@@ -224,11 +226,11 @@ func TestEnsureBPFFSMkdirError(tt *testing.T) {
 	t.Parallel()
 
 	ctrl := gomock.NewController(tt)
-	w := NewMockWorld(ctrl)
-	w.EXPECT().OsMkdirAll("/sys/fs/bpf", bpffsMode).Return(errMockMkdir)
+	w := main.NewMockWorld(ctrl)
+	w.EXPECT().OsMkdirAll("/sys/fs/bpf", main.BPFFSMode).Return(errMockMkdir)
 
-	cmd := &loadCmd{World: w}
-	err := cmd.ensureBPFFS()
+	cmd := &main.LoadCmd{World: w}
+	err := cmd.EnsureBPFFS()
 	t.Match(err, errMockMkdir.Error())
 }
 
@@ -237,12 +239,12 @@ func TestEnsureBPFFSAlreadyMounted(tt *testing.T) {
 	t.Parallel()
 
 	ctrl := gomock.NewController(tt)
-	w := NewMockWorld(ctrl)
-	w.EXPECT().OsMkdirAll("/sys/fs/bpf", bpffsMode).Return(nil)
+	w := main.NewMockWorld(ctrl)
+	w.EXPECT().OsMkdirAll("/sys/fs/bpf", main.BPFFSMode).Return(nil)
 	w.EXPECT().CmdRun(gomock.Any(), "mountpoint", "-q", "/sys/fs/bpf").Return(nil)
 
-	cmd := &loadCmd{World: w}
-	t.Nil(cmd.ensureBPFFS())
+	cmd := &main.LoadCmd{World: w}
+	t.Nil(cmd.EnsureBPFFS())
 }
 
 func TestEnsureBPFFSMountSuccess(tt *testing.T) {
@@ -250,13 +252,13 @@ func TestEnsureBPFFSMountSuccess(tt *testing.T) {
 	t.Parallel()
 
 	ctrl := gomock.NewController(tt)
-	w := NewMockWorld(ctrl)
-	w.EXPECT().OsMkdirAll("/sys/fs/bpf", bpffsMode).Return(nil)
+	w := main.NewMockWorld(ctrl)
+	w.EXPECT().OsMkdirAll("/sys/fs/bpf", main.BPFFSMode).Return(nil)
 	w.EXPECT().CmdRun(gomock.Any(), "mountpoint", "-q", "/sys/fs/bpf").Return(errMockNotMounted)
 	w.EXPECT().CmdOutput("mount", "-t", "bpf", "bpf", "/sys/fs/bpf").Return(nil, nil)
 
-	cmd := &loadCmd{World: w}
-	t.Nil(cmd.ensureBPFFS())
+	cmd := &main.LoadCmd{World: w}
+	t.Nil(cmd.EnsureBPFFS())
 }
 
 func TestEnsureBPFFSMountError(tt *testing.T) {
@@ -264,13 +266,13 @@ func TestEnsureBPFFSMountError(tt *testing.T) {
 	t.Parallel()
 
 	ctrl := gomock.NewController(tt)
-	w := NewMockWorld(ctrl)
-	w.EXPECT().OsMkdirAll("/sys/fs/bpf", bpffsMode).Return(nil)
+	w := main.NewMockWorld(ctrl)
+	w.EXPECT().OsMkdirAll("/sys/fs/bpf", main.BPFFSMode).Return(nil)
 	w.EXPECT().CmdRun(gomock.Any(), "mountpoint", "-q", "/sys/fs/bpf").Return(errMockNotMounted)
 	w.EXPECT().CmdOutput("mount", "-t", "bpf", "bpf", "/sys/fs/bpf").Return([]byte("mount failure details"), errMockMountFailed)
 
-	cmd := &loadCmd{World: w}
-	err := cmd.ensureBPFFS()
+	cmd := &main.LoadCmd{World: w}
+	err := cmd.EnsureBPFFS()
 	t.Match(err, "mount bpf")
 }
 
@@ -279,15 +281,15 @@ func TestSetMarkSuccess(tt *testing.T) {
 	t.Parallel()
 
 	ctrl := gomock.NewController(tt)
-	w := NewMockWorld(ctrl)
+	w := main.NewMockWorld(ctrl)
 	w.EXPECT().CmdRun(gomock.Any(), "bpftool", "map", "update",
-		"pinned", pinDir+"/maps/same_cgroup_mark_cfg",
+		"pinned", main.PinDir+"/maps/same_cgroup_mark_cfg",
 		"key", "hex", "00", "00", "00", "00",
 		"value", "hex", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
 	).Return(nil)
 
-	cmd := &loadCmd{World: w}
-	t.Nil(cmd.setMark(0x40000000))
+	cmd := &main.LoadCmd{World: w}
+	t.Nil(cmd.SetMark(0x40000000))
 }
 
 func TestSetMarkError(tt *testing.T) {
@@ -295,15 +297,15 @@ func TestSetMarkError(tt *testing.T) {
 	t.Parallel()
 
 	ctrl := gomock.NewController(tt)
-	w := NewMockWorld(ctrl)
+	w := main.NewMockWorld(ctrl)
 	w.EXPECT().CmdRun(gomock.Any(), "bpftool", "map", "update",
-		"pinned", pinDir+"/maps/same_cgroup_mark_cfg",
+		"pinned", main.PinDir+"/maps/same_cgroup_mark_cfg",
 		"key", "hex", "00", "00", "00", "00",
 		"value", "hex", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
 	).Return(errMockBpftool)
 
-	cmd := &loadCmd{World: w}
-	err := cmd.setMark(0x40000000)
+	cmd := &main.LoadCmd{World: w}
+	err := cmd.SetMark(0x40000000)
 	t.Match(err, "set mark")
 }
 
@@ -312,10 +314,10 @@ func TestUnloadNotExists(tt *testing.T) {
 	t.Parallel()
 
 	ctrl := gomock.NewController(tt)
-	w := NewMockWorld(ctrl)
-	w.EXPECT().OsStat(pinDir).Return(nil, os.ErrNotExist)
+	w := main.NewMockWorld(ctrl)
+	w.EXPECT().OsStat(main.PinDir).Return(nil, os.ErrNotExist)
 
-	t.Nil(unload(w))
+	t.Nil(main.UnloadBPF(w))
 }
 
 func TestUnloadExists(tt *testing.T) {
@@ -323,14 +325,14 @@ func TestUnloadExists(tt *testing.T) {
 	t.Parallel()
 
 	ctrl := gomock.NewController(tt)
-	w := NewMockWorld(ctrl)
-	w.EXPECT().OsStat(pinDir).Return(dummyFileInfo{}, nil)
+	w := main.NewMockWorld(ctrl)
+	w.EXPECT().OsStat(main.PinDir).Return(dummyFileInfo{}, nil)
 	w.EXPECT().CmdRun(gomock.Any(), "bpftool", "cgroup", "detach",
 		"/sys/fs/cgroup", gomock.Any(), "pinned", gomock.Any(),
 	).Return(nil).Times(4)
-	w.EXPECT().OsRemoveAll(pinDir).Return(nil)
+	w.EXPECT().OsRemoveAll(main.PinDir).Return(nil)
 
-	t.Nil(unload(w))
+	t.Nil(main.UnloadBPF(w))
 }
 
 func TestLoadRunRootCheckError(tt *testing.T) {
@@ -338,11 +340,11 @@ func TestLoadRunRootCheckError(tt *testing.T) {
 	t.Parallel()
 
 	ctrl := gomock.NewController(tt)
-	w := NewMockWorld(ctrl)
+	w := main.NewMockWorld(ctrl)
 	w.EXPECT().OsGeteuid().Return(1000)
 
-	cmd := &loadCmd{}
-	t.Equal(cmd.Run(w), errMustBeRoot)
+	cmd := &main.LoadCmd{}
+	t.Equal(cmd.Run(w), main.ErrMustBeRoot)
 }
 
 func TestLoadRunEnsureBPFFSError(tt *testing.T) {
@@ -350,18 +352,18 @@ func TestLoadRunEnsureBPFFSError(tt *testing.T) {
 	t.Parallel()
 
 	ctrl := gomock.NewController(tt)
-	w := NewMockWorld(ctrl)
-	tf := NewMockTempFile(ctrl)
+	w := main.NewMockWorld(ctrl)
+	tf := main.NewMockTempFile(ctrl)
 
 	w.EXPECT().OsGeteuid().Return(0)
-	w.EXPECT().OsStat(pinDir).Return(nil, os.ErrNotExist)
+	w.EXPECT().OsStat(main.PinDir).Return(nil, os.ErrNotExist)
 	w.EXPECT().OsCreateTemp("", "same-cgroup-mark.*.bpf.o").Return(tf, nil)
-	tf.EXPECT().Write(gomock.Any()).Return(len(bpfObj), nil)
+	tf.EXPECT().Write(gomock.Any()).Return(len(main.BPFObj), nil)
 	tf.EXPECT().Close().Return(nil)
 	tf.EXPECT().Name().Return("/tmp/test.bpf.o")
-	w.EXPECT().OsMkdirAll("/sys/fs/bpf", bpffsMode).Return(errMockMkdir)
+	w.EXPECT().OsMkdirAll("/sys/fs/bpf", main.BPFFSMode).Return(errMockMkdir)
 
-	cmd := &loadCmd{}
+	cmd := &main.LoadCmd{}
 	err := cmd.Run(w)
 	t.Match(err, errMockMkdir.Error())
 }
@@ -371,13 +373,13 @@ func TestLoadRunWriteTempBPFObjError(tt *testing.T) {
 	t.Parallel()
 
 	ctrl := gomock.NewController(tt)
-	w := NewMockWorld(ctrl)
+	w := main.NewMockWorld(ctrl)
 
 	w.EXPECT().OsGeteuid().Return(0)
-	w.EXPECT().OsStat(pinDir).Return(nil, os.ErrNotExist)
+	w.EXPECT().OsStat(main.PinDir).Return(nil, os.ErrNotExist)
 	w.EXPECT().OsCreateTemp("", "same-cgroup-mark.*.bpf.o").Return(nil, errMockMkdir)
 
-	cmd := &loadCmd{}
+	cmd := &main.LoadCmd{}
 	err := cmd.Run(w)
 	t.Match(err, errMockMkdir.Error())
 }
@@ -387,23 +389,23 @@ func TestLoadRunBPFToolLoadallError(tt *testing.T) {
 	t.Parallel()
 
 	ctrl := gomock.NewController(tt)
-	w := NewMockWorld(ctrl)
-	tf := NewMockTempFile(ctrl)
+	w := main.NewMockWorld(ctrl)
+	tf := main.NewMockTempFile(ctrl)
 
 	w.EXPECT().OsGeteuid().Return(0)
-	w.EXPECT().OsStat(pinDir).Return(nil, os.ErrNotExist)
+	w.EXPECT().OsStat(main.PinDir).Return(nil, os.ErrNotExist)
 	w.EXPECT().OsCreateTemp("", "same-cgroup-mark.*.bpf.o").Return(tf, nil)
-	tf.EXPECT().Write(gomock.Any()).Return(len(bpfObj), nil)
+	tf.EXPECT().Write(gomock.Any()).Return(len(main.BPFObj), nil)
 	tf.EXPECT().Close().Return(nil)
 	tf.EXPECT().Name().Return("/tmp/test.bpf.o")
-	w.EXPECT().OsMkdirAll("/sys/fs/bpf", bpffsMode).Return(nil)
+	w.EXPECT().OsMkdirAll("/sys/fs/bpf", main.BPFFSMode).Return(nil)
 	w.EXPECT().CmdRun(gomock.Any(), "mountpoint", "-q", "/sys/fs/bpf").Return(nil)
-	w.EXPECT().OsRemoveAll(pinDir).Return(nil)
+	w.EXPECT().OsRemoveAll(main.PinDir).Return(nil)
 	w.EXPECT().CmdRun(gomock.Any(), "bpftool", "prog", "loadall",
-		gomock.Any(), pinDir, "pinmaps", pinDir+"/maps",
+		gomock.Any(), main.PinDir, "pinmaps", main.PinDir+"/maps",
 	).Return(errMockLoadall)
 
-	cmd := &loadCmd{}
+	cmd := &main.LoadCmd{}
 	err := cmd.Run(w)
 	t.Match(err, "bpftool loadall")
 }
@@ -413,20 +415,20 @@ func TestLoadRunAttachError(tt *testing.T) {
 	t.Parallel()
 
 	ctrl := gomock.NewController(tt)
-	w := NewMockWorld(ctrl)
-	tf := NewMockTempFile(ctrl)
+	w := main.NewMockWorld(ctrl)
+	tf := main.NewMockTempFile(ctrl)
 
 	w.EXPECT().OsGeteuid().Return(0)
-	w.EXPECT().OsStat(pinDir).Return(nil, os.ErrNotExist)
+	w.EXPECT().OsStat(main.PinDir).Return(nil, os.ErrNotExist)
 	w.EXPECT().OsCreateTemp("", "same-cgroup-mark.*.bpf.o").Return(tf, nil)
-	tf.EXPECT().Write(gomock.Any()).Return(len(bpfObj), nil)
+	tf.EXPECT().Write(gomock.Any()).Return(len(main.BPFObj), nil)
 	tf.EXPECT().Close().Return(nil)
 	tf.EXPECT().Name().Return("/tmp/test.bpf.o")
-	w.EXPECT().OsMkdirAll("/sys/fs/bpf", bpffsMode).Return(nil)
+	w.EXPECT().OsMkdirAll("/sys/fs/bpf", main.BPFFSMode).Return(nil)
 	w.EXPECT().CmdRun(gomock.Any(), "mountpoint", "-q", "/sys/fs/bpf").Return(nil)
-	w.EXPECT().OsRemoveAll(pinDir).Return(nil)
+	w.EXPECT().OsRemoveAll(main.PinDir).Return(nil)
 	w.EXPECT().CmdRun(gomock.Any(), "bpftool", "prog", "loadall",
-		gomock.Any(), pinDir, "pinmaps", pinDir+"/maps",
+		gomock.Any(), main.PinDir, "pinmaps", main.PinDir+"/maps",
 	).Return(nil)
 	w.EXPECT().CmdRun(gomock.Any(), "bpftool", "cgroup", "attach",
 		"/sys/fs/cgroup", gomock.Any(), "pinned", gomock.Any(),
@@ -441,7 +443,7 @@ func TestLoadRunAttachError(tt *testing.T) {
 		"/sys/fs/cgroup", gomock.Any(), "pinned", gomock.Any(),
 	).Return(errMockAttach)
 
-	cmd := &loadCmd{}
+	cmd := &main.LoadCmd{}
 	err := cmd.Run(w)
 	t.Match(err, "attach")
 }
@@ -451,20 +453,20 @@ func TestLoadRunCleanupPinDirError(tt *testing.T) {
 	t.Parallel()
 
 	ctrl := gomock.NewController(tt)
-	w := NewMockWorld(ctrl)
-	tf := NewMockTempFile(ctrl)
+	w := main.NewMockWorld(ctrl)
+	tf := main.NewMockTempFile(ctrl)
 
 	w.EXPECT().OsGeteuid().Return(0)
-	w.EXPECT().OsStat(pinDir).Return(nil, os.ErrNotExist)
+	w.EXPECT().OsStat(main.PinDir).Return(nil, os.ErrNotExist)
 	w.EXPECT().OsCreateTemp("", "same-cgroup-mark.*.bpf.o").Return(tf, nil)
-	tf.EXPECT().Write(gomock.Any()).Return(len(bpfObj), nil)
+	tf.EXPECT().Write(gomock.Any()).Return(len(main.BPFObj), nil)
 	tf.EXPECT().Close().Return(nil)
 	tf.EXPECT().Name().Return("/tmp/test.bpf.o")
-	w.EXPECT().OsMkdirAll("/sys/fs/bpf", bpffsMode).Return(nil)
+	w.EXPECT().OsMkdirAll("/sys/fs/bpf", main.BPFFSMode).Return(nil)
 	w.EXPECT().CmdRun(gomock.Any(), "mountpoint", "-q", "/sys/fs/bpf").Return(nil)
-	w.EXPECT().OsRemoveAll(pinDir).Return(errMockRemove)
+	w.EXPECT().OsRemoveAll(main.PinDir).Return(errMockRemove)
 
-	cmd := &loadCmd{}
+	cmd := &main.LoadCmd{}
 	err := cmd.Run(w)
 	t.Match(err, "cleanup old pin dir")
 }
@@ -474,26 +476,26 @@ func TestLoadRunParseMarkError(tt *testing.T) {
 	t.Parallel()
 
 	ctrl := gomock.NewController(tt)
-	w := NewMockWorld(ctrl)
-	tf := NewMockTempFile(ctrl)
+	w := main.NewMockWorld(ctrl)
+	tf := main.NewMockTempFile(ctrl)
 
 	w.EXPECT().OsGeteuid().Return(0)
-	w.EXPECT().OsStat(pinDir).Return(nil, os.ErrNotExist)
+	w.EXPECT().OsStat(main.PinDir).Return(nil, os.ErrNotExist)
 	w.EXPECT().OsCreateTemp("", "same-cgroup-mark.*.bpf.o").Return(tf, nil)
-	tf.EXPECT().Write(gomock.Any()).Return(len(bpfObj), nil)
+	tf.EXPECT().Write(gomock.Any()).Return(len(main.BPFObj), nil)
 	tf.EXPECT().Close().Return(nil)
 	tf.EXPECT().Name().Return("/tmp/test.bpf.o")
-	w.EXPECT().OsMkdirAll("/sys/fs/bpf", bpffsMode).Return(nil)
+	w.EXPECT().OsMkdirAll("/sys/fs/bpf", main.BPFFSMode).Return(nil)
 	w.EXPECT().CmdRun(gomock.Any(), "mountpoint", "-q", "/sys/fs/bpf").Return(nil)
-	w.EXPECT().OsRemoveAll(pinDir).Return(nil)
+	w.EXPECT().OsRemoveAll(main.PinDir).Return(nil)
 	w.EXPECT().CmdRun(gomock.Any(), "bpftool", "prog", "loadall",
-		gomock.Any(), pinDir, "pinmaps", pinDir+"/maps",
+		gomock.Any(), main.PinDir, "pinmaps", main.PinDir+"/maps",
 	).Return(nil)
 	w.EXPECT().CmdRun(gomock.Any(), "bpftool", "cgroup", "attach",
 		"/sys/fs/cgroup", gomock.Any(), "pinned", gomock.Any(),
 	).Return(nil).Times(4)
 
-	cmd := &loadCmd{Mark: "not-a-valid-mark"}
+	cmd := &main.LoadCmd{Mark: "not-a-valid-mark"}
 	err := cmd.Run(w)
 	t.Match(err, "invalid mark value")
 }
@@ -503,31 +505,31 @@ func TestLoadRunSetMarkError(tt *testing.T) {
 	t.Parallel()
 
 	ctrl := gomock.NewController(tt)
-	w := NewMockWorld(ctrl)
-	tf := NewMockTempFile(ctrl)
+	w := main.NewMockWorld(ctrl)
+	tf := main.NewMockTempFile(ctrl)
 
 	w.EXPECT().OsGeteuid().Return(0)
-	w.EXPECT().OsStat(pinDir).Return(nil, os.ErrNotExist)
+	w.EXPECT().OsStat(main.PinDir).Return(nil, os.ErrNotExist)
 	w.EXPECT().OsCreateTemp("", "same-cgroup-mark.*.bpf.o").Return(tf, nil)
-	tf.EXPECT().Write(gomock.Any()).Return(len(bpfObj), nil)
+	tf.EXPECT().Write(gomock.Any()).Return(len(main.BPFObj), nil)
 	tf.EXPECT().Close().Return(nil)
 	tf.EXPECT().Name().Return("/tmp/test.bpf.o")
-	w.EXPECT().OsMkdirAll("/sys/fs/bpf", bpffsMode).Return(nil)
+	w.EXPECT().OsMkdirAll("/sys/fs/bpf", main.BPFFSMode).Return(nil)
 	w.EXPECT().CmdRun(gomock.Any(), "mountpoint", "-q", "/sys/fs/bpf").Return(nil)
-	w.EXPECT().OsRemoveAll(pinDir).Return(nil)
+	w.EXPECT().OsRemoveAll(main.PinDir).Return(nil)
 	w.EXPECT().CmdRun(gomock.Any(), "bpftool", "prog", "loadall",
-		gomock.Any(), pinDir, "pinmaps", pinDir+"/maps",
+		gomock.Any(), main.PinDir, "pinmaps", main.PinDir+"/maps",
 	).Return(nil)
 	w.EXPECT().CmdRun(gomock.Any(), "bpftool", "cgroup", "attach",
 		"/sys/fs/cgroup", gomock.Any(), "pinned", gomock.Any(),
 	).Return(nil).Times(4)
 	w.EXPECT().CmdRun(gomock.Any(), "bpftool", "map", "update",
-		"pinned", pinDir+"/maps/same_cgroup_mark_cfg",
+		"pinned", main.PinDir+"/maps/same_cgroup_mark_cfg",
 		"key", "hex", "00", "00", "00", "00",
 		"value", "hex", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
 	).Return(errMockSetMark)
 
-	cmd := &loadCmd{Mark: "0x40000000"}
+	cmd := &main.LoadCmd{Mark: "0x40000000"}
 	err := cmd.Run(w)
 	t.Match(err, "set mark")
 }
@@ -537,26 +539,26 @@ func TestLoadRunSuccess(tt *testing.T) {
 	t.Parallel()
 
 	ctrl := gomock.NewController(tt)
-	w := NewMockWorld(ctrl)
-	tf := NewMockTempFile(ctrl)
+	w := main.NewMockWorld(ctrl)
+	tf := main.NewMockTempFile(ctrl)
 
 	w.EXPECT().OsGeteuid().Return(0)
-	w.EXPECT().OsStat(pinDir).Return(nil, os.ErrNotExist)
+	w.EXPECT().OsStat(main.PinDir).Return(nil, os.ErrNotExist)
 	w.EXPECT().OsCreateTemp("", "same-cgroup-mark.*.bpf.o").Return(tf, nil)
-	tf.EXPECT().Write(gomock.Any()).Return(len(bpfObj), nil)
+	tf.EXPECT().Write(gomock.Any()).Return(len(main.BPFObj), nil)
 	tf.EXPECT().Close().Return(nil)
 	tf.EXPECT().Name().Return("/tmp/test.bpf.o")
-	w.EXPECT().OsMkdirAll("/sys/fs/bpf", bpffsMode).Return(nil)
+	w.EXPECT().OsMkdirAll("/sys/fs/bpf", main.BPFFSMode).Return(nil)
 	w.EXPECT().CmdRun(gomock.Any(), "mountpoint", "-q", "/sys/fs/bpf").Return(nil)
-	w.EXPECT().OsRemoveAll(pinDir).Return(nil)
+	w.EXPECT().OsRemoveAll(main.PinDir).Return(nil)
 	w.EXPECT().CmdRun(gomock.Any(), "bpftool", "prog", "loadall",
-		gomock.Any(), pinDir, "pinmaps", pinDir+"/maps",
+		gomock.Any(), main.PinDir, "pinmaps", main.PinDir+"/maps",
 	).Return(nil)
 	w.EXPECT().CmdRun(gomock.Any(), "bpftool", "cgroup", "attach",
 		"/sys/fs/cgroup", gomock.Any(), "pinned", gomock.Any(),
 	).Return(nil).Times(4)
 
-	cmd := &loadCmd{Mark: ""}
+	cmd := &main.LoadCmd{Mark: ""}
 	t.Nil(cmd.Run(w))
 }
 
@@ -565,31 +567,31 @@ func TestLoadRunSuccessWithMark(tt *testing.T) {
 	t.Parallel()
 
 	ctrl := gomock.NewController(tt)
-	w := NewMockWorld(ctrl)
-	tf := NewMockTempFile(ctrl)
+	w := main.NewMockWorld(ctrl)
+	tf := main.NewMockTempFile(ctrl)
 
 	w.EXPECT().OsGeteuid().Return(0)
-	w.EXPECT().OsStat(pinDir).Return(nil, os.ErrNotExist)
+	w.EXPECT().OsStat(main.PinDir).Return(nil, os.ErrNotExist)
 	w.EXPECT().OsCreateTemp("", "same-cgroup-mark.*.bpf.o").Return(tf, nil)
-	tf.EXPECT().Write(gomock.Any()).Return(len(bpfObj), nil)
+	tf.EXPECT().Write(gomock.Any()).Return(len(main.BPFObj), nil)
 	tf.EXPECT().Close().Return(nil)
 	tf.EXPECT().Name().Return("/tmp/test.bpf.o")
-	w.EXPECT().OsMkdirAll("/sys/fs/bpf", bpffsMode).Return(nil)
+	w.EXPECT().OsMkdirAll("/sys/fs/bpf", main.BPFFSMode).Return(nil)
 	w.EXPECT().CmdRun(gomock.Any(), "mountpoint", "-q", "/sys/fs/bpf").Return(nil)
-	w.EXPECT().OsRemoveAll(pinDir).Return(nil)
+	w.EXPECT().OsRemoveAll(main.PinDir).Return(nil)
 	w.EXPECT().CmdRun(gomock.Any(), "bpftool", "prog", "loadall",
-		gomock.Any(), pinDir, "pinmaps", pinDir+"/maps",
+		gomock.Any(), main.PinDir, "pinmaps", main.PinDir+"/maps",
 	).Return(nil)
 	w.EXPECT().CmdRun(gomock.Any(), "bpftool", "cgroup", "attach",
 		"/sys/fs/cgroup", gomock.Any(), "pinned", gomock.Any(),
 	).Return(nil).Times(4)
 	w.EXPECT().CmdRun(gomock.Any(), "bpftool", "map", "update",
-		"pinned", pinDir+"/maps/same_cgroup_mark_cfg",
+		"pinned", main.PinDir+"/maps/same_cgroup_mark_cfg",
 		"key", "hex", "00", "00", "00", "00",
 		"value", "hex", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
 	).Return(nil)
 
-	cmd := &loadCmd{Mark: "0x40000000"}
+	cmd := &main.LoadCmd{Mark: "0x40000000"}
 	t.Nil(cmd.Run(w))
 }
 
@@ -598,11 +600,11 @@ func TestUnloadRunRootCheckError(tt *testing.T) {
 	t.Parallel()
 
 	ctrl := gomock.NewController(tt)
-	w := NewMockWorld(ctrl)
+	w := main.NewMockWorld(ctrl)
 	w.EXPECT().OsGeteuid().Return(1000)
 
-	cmd := &unloadCmd{}
-	t.Equal(cmd.Run(w), errMustBeRoot)
+	cmd := &main.UnloadCmd{}
+	t.Equal(cmd.Run(w), main.ErrMustBeRoot)
 }
 
 func TestUnloadRunSuccess(tt *testing.T) {
@@ -610,10 +612,10 @@ func TestUnloadRunSuccess(tt *testing.T) {
 	t.Parallel()
 
 	ctrl := gomock.NewController(tt)
-	w := NewMockWorld(ctrl)
+	w := main.NewMockWorld(ctrl)
 	w.EXPECT().OsGeteuid().Return(0)
-	w.EXPECT().OsStat(pinDir).Return(nil, os.ErrNotExist)
+	w.EXPECT().OsStat(main.PinDir).Return(nil, os.ErrNotExist)
 
-	cmd := &unloadCmd{}
+	cmd := &main.UnloadCmd{}
 	t.Nil(cmd.Run(w))
 }

@@ -5,8 +5,8 @@ import "github.com/alecthomas/kong"
 
 // CLI defines the command-line interface for the program.
 type CLI struct {
-	Load   loadCmd   `cmd:"" help:"Load and attach the eBPF program."`
-	Unload unloadCmd `cmd:"" help:"Detach and unload the eBPF program."`
+	Load   LoadCmd   `cmd:"" help:"Load and attach the eBPF program."`
+	Unload UnloadCmd `cmd:"" help:"Detach and unload the eBPF program."`
 }
 
 func main() {
