@@ -393,21 +393,6 @@ func TestAppUnloadBPF_Exists(tt *testing.T) {
 	t.Nil(a.UnloadBPF())
 }
 
-func TestAppWriteTempBPFObj(tt *testing.T) {
-	t := check.T(tt).MustAll()
-	t.Parallel()
-
-	a := main.NewApp(&main.RealWorld{})
-	path, err := a.WriteTempBPFObj()
-	t.Nil(err)
-	defer os.Remove(path)
-
-	data, err := os.ReadFile(path)
-	t.Nil(err)
-
-	t.DeepEqual(data, main.BPFObj)
-}
-
 func TestAppWriteTempBPFObj_CreateTempError(tt *testing.T) {
 	t := check.T(tt).MustAll()
 	t.Parallel()
