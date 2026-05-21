@@ -12,9 +12,23 @@ var (
 	ErrMarkOverflow = errors.New("mark value exceeds 32-bit maximum (0xFFFFFFFF)")
 )
 
+// Mark is a validated 32-bit mark value.
+// It implements [encoding.TextUnmarshaler] for use as a Kong custom type.
+type Mark uint32
+
+// UnmarshalText implements [encoding.TextUnmarshaler] for Kong flag parsing.
+func (m *Mark) UnmarshalText(text []byte) error {
+	v, err := ParseMark(string(text))
+	if err != nil {
+		return err
+	}
+	*m = Mark(v)
+	return nil
+}
+
 // LoadCmd loads and attaches the eBPF program.
 type LoadCmd struct {
-	Mark string `help:"Mark mask (e.g. 0x40000000)." short:"m"`
+	Mark *Mark `help:"Mark mask (e.g. 0x40000000)." short:"m"`
 }
 
 // Run executes the LoadCmd.
@@ -24,12 +38,8 @@ func (c *LoadCmd) Run(a App) error {
 		return err
 	}
 
-	if c.Mark != "" {
-		mark, err := ParseMark(c.Mark)
-		if err != nil {
-			return err
-		}
-		return a.SetMark(mark)
+	if c.Mark != nil {
+		return a.SetMark(uint32(*c.Mark))
 	}
 
 	return nil

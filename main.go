@@ -15,5 +15,6 @@ func main() {
 		kong.Description("Set SO_MARK on TCP sockets in the same cgroup."),
 		kong.ShortUsageOnError(),
 	)
-	ctx.FatalIfErrorf(ctx.Run(NewApp(RealWorld{})))
+	ctx.BindTo(NewApp(RealWorld{}), (*App)(nil))
+	ctx.FatalIfErrorf(ctx.Run())
 }
