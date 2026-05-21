@@ -16,6 +16,44 @@ import (
 	"time"
 )
 
+// tempFile allows mocking [os.File] operations in writeTempBPFObj tests.
+type tempFile interface {
+	Write(p []byte) (n int, err error)
+	Close() error
+	Name() string
+}
+
+// Mockable dependencies for testing.
+//
+//nolint:gochecknoglobals // mockable dependencies for testing
+var (
+	cmdRun       = realCmdRun
+	cmdOutput    = realCmdOutput
+	osGeteuid    = os.Geteuid
+	osStat       = os.Stat
+	osRemoveAll  = os.RemoveAll
+	osMkdirAll   = os.MkdirAll
+	osCreateTemp = realOsCreateTemp
+)
+
+//nolint:gosec // args are controlled by the program, not user input
+func realCmdRun(ctx context.Context, name string, args ...string) error {
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+//nolint:gosec // args are controlled by the program, not user input
+func realCmdOutput(ctx context.Context, name string, args ...string) ([]byte, error) {
+	return exec.CommandContext(ctx, name, args...).CombinedOutput()
+}
+
+//nolint:iface // used for mocking in tests
+func realOsCreateTemp(dir, pattern string) (tempFile, error) {
+	return os.CreateTemp(dir, pattern)
+}
+
 //go:embed .cache/same-cgroup-mark.bpf.o
 var bpfObj []byte
 
@@ -55,7 +93,7 @@ func (c *loadCmd) Run(_ *cliContext) error {
 		return err
 	}
 
-	err = os.RemoveAll(pinDir)
+	err = osRemoveAll(pinDir)
 	if err != nil {
 		return fmt.Errorf("cleanup old pin dir: %w", err)
 	}
@@ -104,7 +142,7 @@ func (*unloadCmd) Run(_ *cliContext) error {
 }
 
 func rootCheck() error {
-	if os.Geteuid() != 0 {
+	if osGeteuid() != 0 {
 		return errMustBeRoot
 	}
 
@@ -112,7 +150,7 @@ func rootCheck() error {
 }
 
 func unload() error {
-	_, err := os.Stat(pinDir)
+	_, err := osStat(pinDir)
 	if os.IsNotExist(err) {
 		return nil
 	}
@@ -124,7 +162,7 @@ func unload() error {
 		)
 	}
 
-	return os.RemoveAll(pinDir)
+	return osRemoveAll(pinDir)
 }
 
 type cgroupAttachEntry struct {
@@ -175,17 +213,15 @@ func parseMark(s string) (uint32, error) {
 }
 
 func ensureBPFFS() error {
-	err := os.MkdirAll("/sys/fs/bpf", bpffsMode)
+	err := osMkdirAll("/sys/fs/bpf", bpffsMode)
 	if err != nil {
 		return err
 	}
-	//nolint:noctx // simple mountpoint check, no external request
-	err = exec.Command("mountpoint", "-q", "/sys/fs/bpf").Run()
+	err = cmdRun(context.Background(), "mountpoint", "-q", "/sys/fs/bpf")
 	if err == nil {
 		return nil
 	}
-	//nolint:noctx // simple mount command, no external request
-	out, err := exec.Command("mount", "-t", "bpf", "bpf", "/sys/fs/bpf").CombinedOutput()
+	out, err := cmdOutput(context.Background(), "mount", "-t", "bpf", "bpf", "/sys/fs/bpf")
 	if err != nil {
 		return fmt.Errorf("mount bpffs: %w\n%s", err, out)
 	}
@@ -193,7 +229,7 @@ func ensureBPFFS() error {
 }
 
 func writeTempBPFObj() (string, error) {
-	f, err := os.CreateTemp("", "same-cgroup-mark-*.bpf.o")
+	f, err := osCreateTemp("", "same-cgroup-mark-*.bpf.o")
 	if err != nil {
 		return "", fmt.Errorf("create temp file: %w", err)
 	}
@@ -211,13 +247,9 @@ func writeTempBPFObj() (string, error) {
 	return f.Name(), nil
 }
 
-//nolint:gosec // args are controlled by the program, not user input
 func run(args ...string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), bpfTimeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	return cmdRun(ctx, args[0], args[1:]...)
 }
