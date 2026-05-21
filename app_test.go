@@ -345,7 +345,7 @@ func TestAppSetMark_Success(tt *testing.T) {
 	).Return(nil)
 
 	a := main.NewApp(w)
-	t.Nil(a.SetMark(0x40000000))
+	t.Nil(a.SetMark(main.Mark(0x40000000)))
 }
 
 func TestAppSetMark_Error(tt *testing.T) {
@@ -361,7 +361,7 @@ func TestAppSetMark_Error(tt *testing.T) {
 	).Return(errMockBpftool)
 
 	a := main.NewApp(w)
-	err := a.SetMark(0x40000000)
+	err := a.SetMark(main.Mark(0x40000000))
 	t.Match(err, "set mark")
 }
 
@@ -442,25 +442,6 @@ func TestAppWriteTempBPFObj_CloseError(tt *testing.T) {
 	t.Match(err, "close temp file")
 }
 
-func TestMarkToLE(tt *testing.T) {
-	t := check.T(tt).MustAll()
-	t.Parallel()
-
-	tests := []struct {
-		mark uint32
-		want [4]string
-	}{
-		{0x40000000, [4]string{"00", "00", "00", "40"}},
-		{0x00000001, [4]string{"01", "00", "00", "00"}},
-		{0x10000000, [4]string{"00", "00", "00", "10"}},
-		{0xFFFFFFFF, [4]string{"ff", "ff", "ff", "ff"}},
-		{0xABCDEF01, [4]string{"01", "ef", "cd", "ab"}},
-	}
-	for _, tc := range tests {
-		t.DeepEqual(main.MarkToLE(tc.mark), tc.want)
-	}
-}
-
 func TestCgroupAttach(tt *testing.T) {
 	t := check.T(tt).MustAll()
 	t.Parallel()
@@ -471,49 +452,4 @@ func TestCgroupAttach(tt *testing.T) {
 	t.Equal(entries[1], main.CgroupAttachEntry{"same_cgroup_bind6", "cgroup_inet6_bind"})
 	t.Equal(entries[2], main.CgroupAttachEntry{"same_cgroup_connect4", "cgroup_inet4_connect"})
 	t.Equal(entries[3], main.CgroupAttachEntry{"same_cgroup_connect6", "cgroup_inet6_connect"})
-}
-
-func TestParseMark(tt *testing.T) {
-	t := check.T(tt).MustAll()
-	t.Parallel()
-
-	tests := []struct {
-		input string
-		want  uint32
-	}{
-		{"0x40000000", 0x40000000},
-		{"0x20000000", 0x20000000},
-		{"0x1", 1},
-		{"40000000", 0x40000000},
-	}
-	for _, tc := range tests {
-		got, err := main.ParseMark(tc.input)
-		t.Nil(err)
-		t.Equal(got, tc.want)
-	}
-}
-
-func TestParseMark_Invalid(tt *testing.T) {
-	t := check.T(tt).MustAll()
-	t.Parallel()
-
-	_, err := main.ParseMark("not-a-number")
-	t.NotNil(err)
-}
-
-func TestParseMark_Overflow(tt *testing.T) {
-	t := check.T(tt).MustAll()
-	t.Parallel()
-
-	_, err := main.ParseMark("0x1FFFFFFFF")
-	t.NotNil(err)
-}
-
-func TestParseMark_MaxUint32(tt *testing.T) {
-	t := check.T(tt).MustAll()
-	t.Parallel()
-
-	v, err := main.ParseMark("0xFFFFFFFF")
-	t.Nil(err)
-	t.Equal(v, uint32(0xFFFFFFFF))
 }

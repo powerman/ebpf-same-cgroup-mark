@@ -37,7 +37,7 @@ type App interface {
 	Unload() error
 	RootCheck() error
 	UnloadBPF() error
-	SetMark(mark uint32) error
+	SetMark(m Mark) error
 	EnsureBPFFS() error
 	WriteTempBPFObj() (string, error)
 	RunCmd(args ...string) error
@@ -135,15 +135,9 @@ func (a *app) UnloadBPF() error {
 	return a.OsRemoveAll(PinDir)
 }
 
-// MarkToLE converts a uint32 mark value to a little-endian hexadecimal string array for bpftool.
-func MarkToLE(mark uint32) [4]string {
-	hex := fmt.Sprintf("%08x", mark)
-	return [4]string{hex[6:8], hex[4:6], hex[2:4], hex[0:2]}
-}
-
 // SetMark updates the mark mask in the eBPF map.
-func (a *app) SetMark(mark uint32) error {
-	leBytes := MarkToLE(mark)
+func (a *app) SetMark(m Mark) error {
+	leBytes := m.ToLE()
 
 	err := a.RunCmd("bpftool", "map", "update",
 		"pinned", PinDir+"/maps/same_cgroup_mark_cfg",
@@ -153,7 +147,7 @@ func (a *app) SetMark(mark uint32) error {
 	if err != nil {
 		return fmt.Errorf("set mark: %w", err)
 	}
-	fmt.Printf("Mark mask set to 0x%08x\n", mark)
+	fmt.Printf("Mark mask set to 0x%08x\n", m)
 	return nil
 }
 

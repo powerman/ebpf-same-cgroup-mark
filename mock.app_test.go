@@ -12,6 +12,7 @@ package main_test
 import (
 	reflect "reflect"
 
+	main "github.com/powerman/ebpf-same-cgroup-mark"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -100,17 +101,17 @@ func (mr *MockAppMockRecorder) RunCmd(args ...any) *gomock.Call {
 }
 
 // SetMark mocks base method.
-func (m *MockApp) SetMark(mark uint32) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetMark", mark)
+func (m_2 *MockApp) SetMark(m main.Mark) error {
+	m_2.ctrl.T.Helper()
+	ret := m_2.ctrl.Call(m_2, "SetMark", m)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SetMark indicates an expected call of SetMark.
-func (mr *MockAppMockRecorder) SetMark(mark any) *gomock.Call {
+func (mr *MockAppMockRecorder) SetMark(m any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetMark", reflect.TypeOf((*MockApp)(nil).SetMark), mark)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetMark", reflect.TypeOf((*MockApp)(nil).SetMark), m)
 }
 
 // Unload mocks base method.
