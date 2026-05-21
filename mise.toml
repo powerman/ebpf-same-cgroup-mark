@@ -135,6 +135,7 @@ gotestsum -- \
     -coverpkg="$(go list ./... | paste -s -d,)" \
     -coverprofile {{vars.cover}} \
     ./...
+go tool cover -html={{vars.cover}} -o {{vars.cover}}.html
 '''
 
 [tasks.cachedir]
