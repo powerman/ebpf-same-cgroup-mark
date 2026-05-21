@@ -1,3 +1,5 @@
+//go:generate mise exec -- mockgen -package=$GOPACKAGE -source=$GOFILE -destination=mock.$GOFILE -write_package_comment=false
+
 //nolint:godoclint // Thin wrappers over standard library functions.
 package main
 

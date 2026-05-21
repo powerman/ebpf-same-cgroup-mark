@@ -5,6 +5,7 @@ go 1.26
 require (
 	github.com/alecthomas/kong v1.15.0
 	github.com/powerman/check v1.9.1
+	go.uber.org/mock v0.6.0
 )
 
 require (

@@ -5,6 +5,10 @@ lockfile = true # DO NOT FORGET TO `touch mise.lock` if mise.lock does not exist
 [tools]
 go = 'latest'
 
+#--- Generate
+# MockGen generates mock implementations of Go interfaces.
+'go:go.uber.org/mock/mockgen' = 'latest'
+
 #--- Format
 # Opinionated Code Formatter.
 prettier = 'latest'
@@ -35,6 +39,10 @@ description = 'Add commit hash to .cliffignore to exclude from CHANGELOG'
 usage = 'arg "<commit>" help="Git revision (e.g. HEAD or a1b2c4d)"'
 run = 'git rev-parse --verify "${usage_commit}" >> .cliffignore'
 
+[tasks.generate]
+description = 'Generate everything'
+depends = ['generate:*']
+
 [tasks.fmt]
 description = 'Format all files'
 depends = ['fmt:*']
@@ -57,9 +65,13 @@ depends = ['fmt', 'lint', 'test']
 
 [tasks.ci]
 description = 'Run all CI tasks'
-depends = ['fmt', 'lint', 'test']
+depends = ['generate', 'fmt', 'lint', 'test']
 # Is working tree clean after fmt?
 run = '! git status --porcelain | tee /dev/stderr | grep -q .'
+
+[tasks.'generate:go']
+description = 'Generate Go code'
+run = 'go generate ./...'
 
 [tasks.'fmt:markdown']
 description = 'Format markdown files'
@@ -100,7 +112,7 @@ run = 'go build -trimpath -ldflags="-s -w -buildid=" -o .cache/ebpf-same-cgroup-
 [tasks.'test:go']
 description = 'Run Go tests for a whole project'
 depends = ['build:bpf']
-wait_for = ['lint:*']                            # Avoid interleaved output with linters.
+wait_for = ['generate:*', 'lint:*']              # Avoid interleaved output with linters.
 run = 'gotestsum -- -race -timeout=60s ./...'
 
 [tasks.'cover:go:total']
