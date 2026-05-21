@@ -40,20 +40,6 @@ func (m *MockApp) EXPECT() *MockAppMockRecorder {
 	return m.recorder
 }
 
-// EnsureBPFFS mocks base method.
-func (m *MockApp) EnsureBPFFS() error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "EnsureBPFFS")
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// EnsureBPFFS indicates an expected call of EnsureBPFFS.
-func (mr *MockAppMockRecorder) EnsureBPFFS() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnsureBPFFS", reflect.TypeOf((*MockApp)(nil).EnsureBPFFS))
-}
-
 // Load mocks base method.
 func (m *MockApp) Load() error {
 	m.ctrl.T.Helper()
@@ -66,38 +52,6 @@ func (m *MockApp) Load() error {
 func (mr *MockAppMockRecorder) Load() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Load", reflect.TypeOf((*MockApp)(nil).Load))
-}
-
-// RootCheck mocks base method.
-func (m *MockApp) RootCheck() error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RootCheck")
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// RootCheck indicates an expected call of RootCheck.
-func (mr *MockAppMockRecorder) RootCheck() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RootCheck", reflect.TypeOf((*MockApp)(nil).RootCheck))
-}
-
-// RunCmd mocks base method.
-func (m *MockApp) RunCmd(args ...string) error {
-	m.ctrl.T.Helper()
-	varargs := []any{}
-	for _, a := range args {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "RunCmd", varargs...)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// RunCmd indicates an expected call of RunCmd.
-func (mr *MockAppMockRecorder) RunCmd(args ...any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RunCmd", reflect.TypeOf((*MockApp)(nil).RunCmd), args...)
 }
 
 // SetMark mocks base method.
@@ -126,33 +80,4 @@ func (m *MockApp) Unload() error {
 func (mr *MockAppMockRecorder) Unload() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Unload", reflect.TypeOf((*MockApp)(nil).Unload))
-}
-
-// UnloadBPF mocks base method.
-func (m *MockApp) UnloadBPF() error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UnloadBPF")
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// UnloadBPF indicates an expected call of UnloadBPF.
-func (mr *MockAppMockRecorder) UnloadBPF() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnloadBPF", reflect.TypeOf((*MockApp)(nil).UnloadBPF))
-}
-
-// WriteTempBPFObj mocks base method.
-func (m *MockApp) WriteTempBPFObj() (string, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WriteTempBPFObj")
-	ret0, _ := ret[0].(string)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// WriteTempBPFObj indicates an expected call of WriteTempBPFObj.
-func (mr *MockAppMockRecorder) WriteTempBPFObj() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WriteTempBPFObj", reflect.TypeOf((*MockApp)(nil).WriteTempBPFObj))
 }

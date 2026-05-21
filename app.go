@@ -20,9 +20,11 @@ var BPFObj []byte
 
 // Constants.
 const (
-	PinDir     = "/sys/fs/bpf/same-cgroup-mark"
-	cgroupPath = "/sys/fs/cgroup"
-	BPFFSMode  = fs.FileMode(0o750)
+	BPFMode    = fs.FileMode(0o750)
+	BPFRoot    = "/sys/fs/bpf"
+	BPFDir     = BPFRoot + "/same-cgroup-mark"
+	CgroupRoot = "/sys/fs/cgroup"
+
 	bpfTimeout = 10 * time.Second
 )
 
@@ -34,13 +36,8 @@ var (
 // App is the main application.
 type App interface {
 	Load() error
-	Unload() error
-	RootCheck() error
-	UnloadBPF() error
 	SetMark(m Mark) error
-	EnsureBPFFS() error
-	WriteTempBPFObj() (string, error)
-	RunCmd(args ...string) error
+	Unload() error
 }
 
 type app struct {
@@ -54,42 +51,42 @@ func NewApp(world World) *app {
 
 // Load loads and attaches the eBPF program.
 func (a *app) Load() error {
-	err := a.RootCheck()
+	err := a.rootCheck()
 	if err != nil {
 		return err
 	}
 
-	_ = a.UnloadBPF()
+	_ = a.unloadBPF()
 
-	bpfObjPath, err := a.WriteTempBPFObj()
+	bpfObjPath, err := a.writeTempBPFObj()
 	if err != nil {
 		return err
 	}
 	//nolint:errcheck // cleanup on best-effort basis
 	defer os.Remove(bpfObjPath)
 
-	err = a.EnsureBPFFS()
+	err = a.ensureBPFFS()
 	if err != nil {
 		return err
 	}
 
-	err = a.OsRemoveAll(PinDir)
+	err = a.OsRemoveAll(BPFDir)
 	if err != nil {
 		return fmt.Errorf("cleanup old pin dir: %w", err)
 	}
 
-	err = a.RunCmd("bpftool", "prog", "loadall",
-		bpfObjPath, PinDir,
-		"pinmaps", PinDir+"/maps",
+	err = a.runCmd("bpftool", "prog", "loadall",
+		bpfObjPath, BPFDir,
+		"pinmaps", BPFDir+"/maps",
 	)
 	if err != nil {
 		return fmt.Errorf("bpftool loadall: %w", err)
 	}
 
 	for _, att := range CgroupAttach() {
-		progPin := filepath.Join(PinDir, att.ProgName)
-		err = a.RunCmd("bpftool", "cgroup", "attach",
-			cgroupPath, att.AttachType, "pinned", progPin,
+		progPin := filepath.Join(BPFDir, att.ProgName)
+		err = a.runCmd("bpftool", "cgroup", "attach",
+			CgroupRoot, att.AttachType, "pinned", progPin,
 		)
 		if err != nil {
 			return fmt.Errorf("attach %s: %w", att.ProgName, err)
@@ -99,48 +96,12 @@ func (a *app) Load() error {
 	return nil
 }
 
-// Unload detaches and unloads the eBPF program.
-func (a *app) Unload() error {
-	err := a.RootCheck()
-	if err != nil {
-		return err
-	}
-
-	return a.UnloadBPF()
-}
-
-// RootCheck verifies that the program is running with root privileges.
-func (a *app) RootCheck() error {
-	if a.OsGeteuid() != 0 {
-		return ErrMustBeRoot
-	}
-
-	return nil
-}
-
-// UnloadBPF detaches the eBPF program from cgroups and removes pinned objects.
-func (a *app) UnloadBPF() error {
-	_, err := a.OsStat(PinDir)
-	if os.IsNotExist(err) {
-		return nil
-	}
-
-	for _, att := range CgroupAttach() {
-		progPin := filepath.Join(PinDir, att.ProgName)
-		_ = a.RunCmd("bpftool", "cgroup", "detach",
-			cgroupPath, att.AttachType, "pinned", progPin,
-		)
-	}
-
-	return a.OsRemoveAll(PinDir)
-}
-
 // SetMark updates the mark mask in the eBPF map.
 func (a *app) SetMark(m Mark) error {
 	leBytes := m.ToLE()
 
-	err := a.RunCmd("bpftool", "map", "update",
-		"pinned", PinDir+"/maps/same_cgroup_mark_cfg",
+	err := a.runCmd("bpftool", "map", "update",
+		"pinned", BPFDir+"/maps/same_cgroup_mark_cfg",
 		"key", "hex", "00", "00", "00", "00",
 		"value", "hex", leBytes[0], leBytes[1], leBytes[2], leBytes[3],
 	)
@@ -151,25 +112,61 @@ func (a *app) SetMark(m Mark) error {
 	return nil
 }
 
-// EnsureBPFFS checks if the BPF filesystem is mounted and mounts it if not.
-func (a *app) EnsureBPFFS() error {
-	err := a.OsMkdirAll("/sys/fs/bpf", BPFFSMode)
+// Unload detaches and unloads the eBPF program.
+func (a *app) Unload() error {
+	err := a.rootCheck()
 	if err != nil {
 		return err
 	}
-	err = a.RunCmd("mountpoint", "-q", "/sys/fs/bpf")
+
+	return a.unloadBPF()
+}
+
+// rootCheck verifies that the program is running with root privileges.
+func (a *app) rootCheck() error {
+	if a.OsGeteuid() != 0 {
+		return ErrMustBeRoot
+	}
+
+	return nil
+}
+
+// unloadBPF detaches the eBPF program from cgroups and removes pinned objects.
+func (a *app) unloadBPF() error {
+	_, err := a.OsStat(BPFDir)
+	if os.IsNotExist(err) {
+		return nil
+	}
+
+	for _, att := range CgroupAttach() {
+		progPin := filepath.Join(BPFDir, att.ProgName)
+		_ = a.runCmd("bpftool", "cgroup", "detach",
+			CgroupRoot, att.AttachType, "pinned", progPin,
+		)
+	}
+
+	return a.OsRemoveAll(BPFDir)
+}
+
+// ensureBPFFS checks if the BPF filesystem is mounted and mounts it if not.
+func (a *app) ensureBPFFS() error {
+	err := a.OsMkdirAll(BPFRoot, BPFMode)
+	if err != nil {
+		return err
+	}
+	err = a.runCmd("mountpoint", "-q", BPFRoot)
 	if err == nil {
 		return nil
 	}
-	out, err := a.CmdOutput("mount", "-t", "bpf", "bpf", "/sys/fs/bpf")
+	out, err := a.CmdOutput("mount", "-t", "bpf", "bpf", BPFRoot)
 	if err != nil {
 		return fmt.Errorf("mount bpf: %w\n%s", err, out)
 	}
 	return nil
 }
 
-// WriteTempBPFObj writes the embedded eBPF object to a temporary file and returns its path.
-func (a *app) WriteTempBPFObj() (string, error) {
+// writeTempBPFObj writes the embedded eBPF object to a temporary file and returns its path.
+func (a *app) writeTempBPFObj() (string, error) {
 	f, err := a.OsCreateTemp("", "same-cgroup-mark.*.bpf.o")
 	if err != nil {
 		return "", fmt.Errorf("create temp file: %w", err)
@@ -188,8 +185,8 @@ func (a *app) WriteTempBPFObj() (string, error) {
 	return f.Name(), nil
 }
 
-// RunCmd executes a command with the given arguments and a timeout.
-func (a *app) RunCmd(args ...string) error {
+// runCmd executes a command with the given arguments and a timeout.
+func (a *app) runCmd(args ...string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), bpfTimeout)
 	defer cancel()
 
