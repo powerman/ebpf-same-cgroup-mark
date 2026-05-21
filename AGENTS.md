@@ -5,6 +5,17 @@
 Simple eBPF firewall helper: set `SO_MARK` on a TCP client socket
 when the destination listener socket lives in the same cgroup.
 
+### Tasks
+
+Use these commands for corresponding tasks:
+
+- `mise run fmt` — fixes formatting.
+- `mise run lint` — runs all linters.
+- `mise run build` — build everything (BPF + Go binary).
+- `mise run build:bpf` — compile BPF object file only.
+- `mise run test` — run all tests.
+- `mise run cover:go:total` — show Go test coverage total.
+
 ## Mandatory Rules
 
 ### Repository Safety
