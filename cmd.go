@@ -8,44 +8,10 @@ import (
 	"io/fs"
 	"math"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 )
-
-//nolint:gochecknoglobals // Mockable dependencies for testing.
-var (
-	cmdOutput    = realCmdOutput
-	cmdRun       = realCmdRun
-	osCreateTemp = realOsCreateTemp
-	osGeteuid    = os.Geteuid
-	osMkdirAll   = os.MkdirAll
-	osRemoveAll  = os.RemoveAll
-	osStat       = os.Stat
-)
-
-func realCmdRun(ctx context.Context, name string, args ...string) error {
-	cmd := exec.CommandContext(ctx, name, args...) //nolint:gosec // False positive.
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
-}
-
-func realCmdOutput(name string, args ...string) ([]byte, error) {
-	return exec.CommandContext(context.Background(), name, args...).CombinedOutput() //nolint:gosec // False positive.
-}
-
-// tempFile allows mocking [os.File] operations in tests.
-type tempFile interface {
-	Write(p []byte) (n int, err error)
-	Close() error
-	Name() string
-}
-
-func realOsCreateTemp(dir, pattern string) (tempFile, error) { //nolint:iface // By design.
-	return os.CreateTemp(dir, pattern)
-}
 
 //go:embed .cache/same-cgroup-mark.bpf.o
 var bpfObj []byte
@@ -63,35 +29,39 @@ var (
 )
 
 type loadCmd struct {
+	World
+
 	Mark string `help:"Mark mask (e.g. 0x40000000)." short:"m"`
 }
 
-func (c *loadCmd) Run() error {
-	err := rootCheck()
+func (c *loadCmd) Run(world World) error {
+	c.World = world
+
+	err := rootCheck(c.World)
 	if err != nil {
 		return err
 	}
 
-	_ = unload()
+	_ = unload(c.World)
 
-	bpfObjPath, err := writeTempBPFObj()
+	bpfObjPath, err := c.writeTempBPFObj()
 	if err != nil {
 		return err
 	}
 	//nolint:errcheck // cleanup on best-effort basis
 	defer os.Remove(bpfObjPath)
 
-	err = ensureBPFFS()
+	err = c.ensureBPFFS()
 	if err != nil {
 		return err
 	}
 
-	err = osRemoveAll(pinDir)
+	err = c.OsRemoveAll(pinDir)
 	if err != nil {
 		return fmt.Errorf("cleanup old pin dir: %w", err)
 	}
 
-	err = run("bpftool", "prog", "loadall",
+	err = run(c.World, "bpftool", "prog", "loadall",
 		bpfObjPath, pinDir,
 		"pinmaps", pinDir+"/maps",
 	)
@@ -101,7 +71,7 @@ func (c *loadCmd) Run() error {
 
 	for _, a := range cgroupAttach() {
 		progPin := filepath.Join(pinDir, a.progName)
-		err = run("bpftool", "cgroup", "attach",
+		err = run(c.World, "bpftool", "cgroup", "attach",
 			cgroupPath, a.attachType, "pinned", progPin,
 		)
 		if err != nil {
@@ -114,7 +84,7 @@ func (c *loadCmd) Run() error {
 		if err != nil {
 			return err
 		}
-		err = setMark(mark)
+		err = c.setMark(mark)
 		if err != nil {
 			return err
 		}
@@ -123,39 +93,43 @@ func (c *loadCmd) Run() error {
 	return nil
 }
 
-type unloadCmd struct{}
+type unloadCmd struct {
+	World
+}
 
-func (*unloadCmd) Run() error {
-	err := rootCheck()
+func (c *unloadCmd) Run(world World) error {
+	c.World = world
+
+	err := rootCheck(c.World)
 	if err != nil {
 		return err
 	}
 
-	return unload()
+	return unload(c.World)
 }
 
-func rootCheck() error {
-	if osGeteuid() != 0 {
+func rootCheck(w World) error {
+	if w.OsGeteuid() != 0 {
 		return errMustBeRoot
 	}
 
 	return nil
 }
 
-func unload() error {
-	_, err := osStat(pinDir)
+func unload(w World) error {
+	_, err := w.OsStat(pinDir)
 	if os.IsNotExist(err) {
 		return nil
 	}
 
 	for _, a := range cgroupAttach() {
 		progPin := filepath.Join(pinDir, a.progName)
-		_ = run("bpftool", "cgroup", "detach",
+		_ = run(w, "bpftool", "cgroup", "detach",
 			cgroupPath, a.attachType, "pinned", progPin,
 		)
 	}
 
-	return osRemoveAll(pinDir)
+	return w.OsRemoveAll(pinDir)
 }
 
 type cgroupAttachEntry struct {
@@ -171,10 +145,10 @@ func cgroupAttach() []cgroupAttachEntry {
 	}
 }
 
-func setMark(mark uint32) error {
+func (c *loadCmd) setMark(mark uint32) error {
 	leBytes := markToLE(mark)
 
-	err := run("bpftool", "map", "update",
+	err := run(c.World, "bpftool", "map", "update",
 		"pinned", pinDir+"/maps/same_cgroup_mark_cfg",
 		"key", "hex", "00", "00", "00", "00",
 		"value", "hex", leBytes[0], leBytes[1], leBytes[2], leBytes[3],
@@ -205,24 +179,24 @@ func parseMark(s string) (uint32, error) {
 	return uint32(v), nil
 }
 
-func ensureBPFFS() error {
-	err := osMkdirAll("/sys/fs/bpf", bpffsMode)
+func (c *loadCmd) ensureBPFFS() error {
+	err := c.OsMkdirAll("/sys/fs/bpf", bpffsMode)
 	if err != nil {
 		return err
 	}
-	err = cmdRun(context.Background(), "mountpoint", "-q", "/sys/fs/bpf")
+	err = run(c.World, "mountpoint", "-q", "/sys/fs/bpf")
 	if err == nil {
 		return nil
 	}
-	out, err := cmdOutput("mount", "-t", "bpf", "bpf", "/sys/fs/bpf")
+	out, err := c.CmdOutput("mount", "-t", "bpf", "bpf", "/sys/fs/bpf")
 	if err != nil {
 		return fmt.Errorf("mount bpf: %w\n%s", err, out)
 	}
 	return nil
 }
 
-func writeTempBPFObj() (string, error) {
-	f, err := osCreateTemp("", "same-cgroup-mark.*.bpf.o")
+func (c *loadCmd) writeTempBPFObj() (string, error) {
+	f, err := c.OsCreateTemp("", "same-cgroup-mark.*.bpf.o")
 	if err != nil {
 		return "", fmt.Errorf("create temp file: %w", err)
 	}
@@ -240,9 +214,9 @@ func writeTempBPFObj() (string, error) {
 	return f.Name(), nil
 }
 
-func run(args ...string) error {
+func run(w World, args ...string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), bpfTimeout)
 	defer cancel()
 
-	return cmdRun(ctx, args[0], args[1:]...)
+	return w.CmdRun(ctx, args[0], args[1:]...)
 }
