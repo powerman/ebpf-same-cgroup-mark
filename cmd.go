@@ -73,7 +73,7 @@ type loadCmd struct {
 	Mark string `help:"Mark mask (e.g. 0x40000000)." short:"m"`
 }
 
-func (c *loadCmd) Run(_ *cliContext) error {
+func (c *loadCmd) Run() error {
 	err := rootCheck()
 	if err != nil {
 		return err
@@ -132,7 +132,7 @@ func (c *loadCmd) Run(_ *cliContext) error {
 
 type unloadCmd struct{}
 
-func (*unloadCmd) Run(_ *cliContext) error {
+func (*unloadCmd) Run() error {
 	err := rootCheck()
 	if err != nil {
 		return err

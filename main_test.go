@@ -370,7 +370,7 @@ func TestLoadRunRootCheckError(tt *testing.T) {
 	osGeteuid = func() int { return 1000 }
 
 	cmd := &loadCmd{}
-	err := cmd.Run(&cliContext{})
+	err := cmd.Run()
 	t.Equal(err, errMustBeRoot)
 }
 
@@ -385,7 +385,7 @@ func TestLoadRunEnsureBPFFSError(tt *testing.T) {
 	}
 
 	cmd := &loadCmd{}
-	err := cmd.Run(&cliContext{})
+	err := cmd.Run()
 	t.NotNil(err)
 	t.True(strings.Contains(err.Error(), errMockMkdir.Error()))
 }
@@ -401,7 +401,7 @@ func TestLoadRunWriteTempBPFObjError(tt *testing.T) {
 	}
 
 	cmd := &loadCmd{}
-	err := cmd.Run(&cliContext{})
+	err := cmd.Run()
 	t.NotNil(err)
 	t.True(strings.Contains(err.Error(), errMockMkdir.Error()))
 }
@@ -425,7 +425,7 @@ func TestLoadRunBPFToolLoadallError(tt *testing.T) {
 	}
 
 	cmd := &loadCmd{}
-	err := cmd.Run(&cliContext{})
+	err := cmd.Run()
 	t.NotNil(err)
 	t.True(strings.Contains(err.Error(), "bpftool loadall"))
 }
@@ -449,7 +449,7 @@ func TestLoadRunAttachError(tt *testing.T) {
 	}
 
 	cmd := &loadCmd{}
-	err := cmd.Run(&cliContext{})
+	err := cmd.Run()
 	t.NotNil(err)
 	t.True(strings.Contains(err.Error(), "attach"))
 }
@@ -470,7 +470,7 @@ func TestLoadRunCleanupPinDirError(tt *testing.T) {
 	cmdRun = func(_ context.Context, _ string, _ ...string) error { return nil }
 
 	cmd := &loadCmd{}
-	err := cmd.Run(&cliContext{})
+	err := cmd.Run()
 	t.NotNil(err)
 	t.True(strings.Contains(err.Error(), "cleanup old pin dir"))
 }
@@ -486,7 +486,7 @@ func TestLoadRunParseMarkError(tt *testing.T) {
 	cmdRun = func(_ context.Context, _ string, _ ...string) error { return nil }
 
 	cmd := &loadCmd{Mark: "not-a-valid-mark"}
-	err := cmd.Run(&cliContext{})
+	err := cmd.Run()
 	t.NotNil(err)
 	t.True(strings.Contains(err.Error(), "invalid mark value"))
 }
@@ -510,7 +510,7 @@ func TestLoadRunSetMarkError(tt *testing.T) {
 	}
 
 	cmd := &loadCmd{Mark: "0x40000000"}
-	err := cmd.Run(&cliContext{})
+	err := cmd.Run()
 	t.NotNil(err)
 	t.True(strings.Contains(err.Error(), "set mark"))
 }
@@ -526,7 +526,7 @@ func TestLoadRunSuccess(tt *testing.T) {
 	cmdRun = func(_ context.Context, _ string, _ ...string) error { return nil }
 
 	cmd := &loadCmd{Mark: ""}
-	t.Nil(cmd.Run(&cliContext{}))
+	t.Nil(cmd.Run())
 }
 
 func TestLoadRunSuccessWithMark(tt *testing.T) {
@@ -540,7 +540,7 @@ func TestLoadRunSuccessWithMark(tt *testing.T) {
 	cmdRun = func(_ context.Context, _ string, _ ...string) error { return nil }
 
 	cmd := &loadCmd{Mark: "0x40000000"}
-	t.Nil(cmd.Run(&cliContext{}))
+	t.Nil(cmd.Run())
 }
 
 func TestUnloadRunRootCheckError(tt *testing.T) {
@@ -550,7 +550,7 @@ func TestUnloadRunRootCheckError(tt *testing.T) {
 	osGeteuid = func() int { return 1000 }
 
 	cmd := &unloadCmd{}
-	err := cmd.Run(&cliContext{})
+	err := cmd.Run()
 	t.Equal(err, errMustBeRoot)
 }
 
@@ -562,5 +562,5 @@ func TestUnloadRunSuccess(tt *testing.T) {
 	osStat = func(_ string) (os.FileInfo, error) { return nil, os.ErrNotExist }
 
 	cmd := &unloadCmd{}
-	t.Nil(cmd.Run(&cliContext{}))
+	t.Nil(cmd.Run())
 }
