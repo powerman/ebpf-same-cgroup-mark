@@ -2,7 +2,7 @@ package main
 
 // LoadCmd loads and attaches the eBPF program.
 type LoadCmd struct {
-	Mark *Mark `help:"Mark mask (e.g. 0x40000000)." short:"m"`
+	Mark *Mark `help:"Mark mask in hexadecimal (e.g. 0x40000000)." short:"m"`
 }
 
 // Run executes the LoadCmd.

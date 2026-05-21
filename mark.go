@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"strings"
 )
 
 // Errors.
@@ -16,10 +15,16 @@ var (
 // It implements [encoding.TextUnmarshaler] for use as a Kong custom type.
 type Mark uint32
 
+// UnmarshalText implements [encoding.TextUnmarshaler] for Kong flag parsing.
+func (m *Mark) UnmarshalText(text []byte) error {
+	return m.Parse(string(text))
+}
+
 // Parse parses a hexadecimal string into a Mark value.
 func (m *Mark) Parse(s string) error {
-	s = strings.TrimPrefix(s, "0x")
-	s = strings.TrimPrefix(s, "0X")
+	if len(s) > 2 && (s[:2] == "0x" || s[:2] == "0X") {
+		s = s[2:]
+	}
 	var v uint64
 	_, err := fmt.Sscanf(s, "%x", &v)
 	if err != nil {
@@ -30,11 +35,6 @@ func (m *Mark) Parse(s string) error {
 	}
 	*m = Mark(v)
 	return nil
-}
-
-// UnmarshalText implements [encoding.TextUnmarshaler] for Kong flag parsing.
-func (m *Mark) UnmarshalText(text []byte) error {
-	return m.Parse(string(text))
 }
 
 // ToLE converts a Mark value to a little-endian hexadecimal string array for bpftool.
