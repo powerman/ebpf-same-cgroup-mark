@@ -99,3 +99,8 @@ NOTE: The above example does not mean you should break into very short lines as 
 - NEVER include architecture details and namespace-related gotchas into comments,
   add them into corresponding documentation files instead!
   Script comments may only refer docs on these topics, not duplicate or replace it.
+
+### Testing
+
+- Tests must only test the project's own code, not stdlib or third-party libraries.
+  Mock external dependencies (OS, exec) and test your logic, not the underlying library.
