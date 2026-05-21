@@ -14,6 +14,46 @@ import (
 
 var errMockApp = errors.New("mock app error")
 
+func TestLoadCmd_Mark(t *testing.T) {
+	t.Parallel()
+
+	parse := func(t *check.C, args ...string) (cli main.CLI, err error) {
+		t.Helper()
+		k, err := kong.New(&cli,
+			kong.Writers(io.Discard, io.Discard),
+			kong.Exit(func(int) {}),
+		)
+		if err != nil {
+			return cli, err
+		}
+		_, err = k.Parse(args)
+		return cli, err
+	}
+
+	t.Run("NotProvided", func(tt *testing.T) {
+		tt.Parallel()
+		t := check.T(tt).MustAll()
+		cli, err := parse(t, "load")
+		t.Nil(err)
+		t.Nil(cli.Load.Mark)
+	})
+
+	t.Run("Valid", func(tt *testing.T) {
+		tt.Parallel()
+		t := check.T(tt).MustAll()
+		cli, err := parse(t, "load", "--mark", "0x20000000")
+		t.Nil(err)
+		t.DeepEqual(cli.Load.Mark, new(main.Mark(0x20000000)))
+	})
+
+	t.Run("Invalid", func(tt *testing.T) {
+		tt.Parallel()
+		t := check.T(tt).MustAll()
+		_, err := parse(t, "load", "--mark", "invalid")
+		t.Match(err, "invalid mark value")
+	})
+}
+
 func TestLoadCmdRun_LoadError(tt *testing.T) {
 	t := check.T(tt).MustAll()
 	t.Parallel()
