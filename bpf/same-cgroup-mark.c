@@ -84,8 +84,7 @@ out:
 	return 1;
 }
 
-SEC("cgroup/bind4")
-int same_cgroup_bind4(struct bpf_sock_addr *ctx)
+static __always_inline int same_cgroup_bind(struct bpf_sock_addr *ctx)
 {
 	struct same_cgroup_socket_cgroup *storage;
 	__u64 current_cgroup;
@@ -106,26 +105,16 @@ int same_cgroup_bind4(struct bpf_sock_addr *ctx)
 	return 1;
 }
 
+SEC("cgroup/bind4")
+int same_cgroup_bind4(struct bpf_sock_addr *ctx)
+{
+	return same_cgroup_bind(ctx);
+}
+
 SEC("cgroup/bind6")
 int same_cgroup_bind6(struct bpf_sock_addr *ctx)
 {
-	struct same_cgroup_socket_cgroup *storage;
-	__u64 current_cgroup;
-
-	if (!ctx->sk || ctx->type != SOCK_STREAM || ctx->protocol != IPPROTO_TCP)
-		return 1;
-
-	current_cgroup = bpf_get_current_cgroup_id();
-	if (!current_cgroup)
-		return 1;
-
-	storage = bpf_sk_storage_get(&same_cgroup_socket_cgroup, ctx->sk, 0,
-				     BPF_SK_STORAGE_GET_F_CREATE);
-	if (!storage)
-		return 1;
-
-	storage->cgroup_id = current_cgroup;
-	return 1;
+	return same_cgroup_bind(ctx);
 }
 
 SEC("cgroup/connect4")
