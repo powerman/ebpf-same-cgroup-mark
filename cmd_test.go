@@ -12,7 +12,10 @@ import (
 	main "github.com/powerman/ebpf-same-cgroup-mark"
 )
 
-var errMockApp = errors.New("mock app error")
+var (
+	errMockApp      = errors.New("mock app error")
+	errMockRollback = errors.New("mock rollback error")
+)
 
 // kongParse parses command-line arguments using Kong for testing.
 func kongParse(t *check.C, args ...string) (ctx *kong.Context, cli main.CLI, err error) {
@@ -68,10 +71,10 @@ func TestCmd(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name    string
-		args    []string
-		expect  func(a *MockApp)
-		wantErr error
+		name     string
+		args     []string
+		expect   func(a *MockApp)
+		wantErrs []error
 	}{
 		{
 			name: "LoadError",
@@ -79,7 +82,7 @@ func TestCmd(t *testing.T) {
 			expect: func(a *MockApp) {
 				a.EXPECT().Load().Return(errMockApp)
 			},
-			wantErr: errMockApp,
+			wantErrs: []error{errMockApp},
 		},
 		{
 			name: "LoadSetMarkError",
@@ -87,8 +90,19 @@ func TestCmd(t *testing.T) {
 			expect: func(a *MockApp) {
 				a.EXPECT().Load().Return(nil)
 				a.EXPECT().SetMark(main.Mark(0x10000000)).Return(errMockApp)
+				a.EXPECT().Unload().Return(nil)
 			},
-			wantErr: errMockApp,
+			wantErrs: []error{errMockApp},
+		},
+		{
+			name: "LoadSetMarkRollbackFailed",
+			args: []string{"load", "--mark", "0x10000000"},
+			expect: func(a *MockApp) {
+				a.EXPECT().Load().Return(nil)
+				a.EXPECT().SetMark(main.Mark(0x10000000)).Return(errMockApp)
+				a.EXPECT().Unload().Return(errMockRollback)
+			},
+			wantErrs: []error{errMockApp, errMockRollback},
 		},
 		{
 			name: "LoadSuccess",
@@ -111,7 +125,7 @@ func TestCmd(t *testing.T) {
 			expect: func(a *MockApp) {
 				a.EXPECT().Unload().Return(errMockApp)
 			},
-			wantErr: errMockApp,
+			wantErrs: []error{errMockApp},
 		},
 		{
 			name: "UnloadSuccess",
@@ -127,7 +141,13 @@ func TestCmd(t *testing.T) {
 			t := check.T(tt).MustAll()
 			a := NewMockApp(gomock.NewController(t))
 			tc.expect(a)
-			t.Err(kongRun(t, a, tc.args...), tc.wantErr)
+			err := kongRun(t, a, tc.args...)
+			if len(tc.wantErrs) == 0 {
+				t.Nil(err)
+			}
+			for _, wantErr := range tc.wantErrs {
+				t.Err(err, wantErr)
+			}
 		})
 	}
 }

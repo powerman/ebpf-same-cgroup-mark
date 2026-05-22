@@ -1,5 +1,7 @@
 package main
 
+import "errors"
+
 // LoadCmd loads and attaches the eBPF program.
 type LoadCmd struct {
 	Mark *Mark `help:"Mark mask in hexadecimal (e.g. 0x40000000)." short:"m"`
@@ -11,6 +13,9 @@ func (c *LoadCmd) Run(a App) error {
 
 	if err == nil && c.Mark != nil {
 		err = a.SetMark(*c.Mark)
+		if err != nil {
+			err = errors.Join(err, a.Unload())
+		}
 	}
 
 	return err
