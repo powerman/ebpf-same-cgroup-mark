@@ -57,10 +57,10 @@ func expectMounted(ctrl *gomock.Controller, w *MockWorld) {
 	w.EXPECT().ExecCommand("mountpoint", "-q", main.BPFRoot).Return(newCmdRun(ctrl, nil))
 }
 
-// expectUnloadClean sets up a full Unload call with no BPF state to clean up.
-func expectUnloadClean(ctrl *gomock.Controller, w *MockWorld) {
-	w.EXPECT().OsGeteuid().Return(0)
-	w.EXPECT().ExecCommand("mountpoint", "-q", main.BPFRoot).Return(newCmdRun(ctrl, nil))
+// expectCleanupClean sets up the private unload cleanup expectations
+// with detach returning "not found" errors (clean state).
+// Does NOT include prepare/rootcheck — use when calling private unload directly.
+func expectCleanupClean(ctrl *gomock.Controller, w *MockWorld) {
 	for range 4 {
 		w.EXPECT().ExecCommand("bpftool", "cgroup", "detach",
 			main.CgroupRoot, gomock.Any(), "pinned", gomock.Any(),
@@ -71,10 +71,10 @@ func expectUnloadClean(ctrl *gomock.Controller, w *MockWorld) {
 	w.EXPECT().ExecCommand("bpftool", "cgroup", "show", main.CgroupRoot).Return(newCmdOutput(ctrl, nil, nil))
 }
 
-// expectUnloadRollback sets up a full Unload call with BPF state to clean up.
-func expectUnloadRollback(ctrl *gomock.Controller, w *MockWorld) {
-	w.EXPECT().OsGeteuid().Return(0)
-	w.EXPECT().ExecCommand("mountpoint", "-q", main.BPFRoot).Return(newCmdRun(ctrl, nil))
+// expectCleanupRollback sets up the private unload cleanup expectations
+// with successful detach (BPF state present).
+// Does NOT include prepare/rootcheck — use when calling private unload directly.
+func expectCleanupRollback(ctrl *gomock.Controller, w *MockWorld) {
 	for range 4 {
 		w.EXPECT().ExecCommand("bpftool", "cgroup", "detach",
 			main.CgroupRoot, gomock.Any(), "pinned", gomock.Any(),
@@ -104,9 +104,9 @@ func TestAppLoad_WriteTempBPFObjError(tt *testing.T) {
 	ctrl, w, a := newApp(t)
 	w.EXPECT().OsGeteuid().Return(0)
 	expectMounted(ctrl, w)
-	expectUnloadClean(ctrl, w)
+	expectCleanupClean(ctrl, w)
 	w.EXPECT().OsCreateTemp("", "same-cgroup-mark.*.bpf.o").Return(nil, errMockMkdir)
-	expectUnloadClean(ctrl, w)
+	expectCleanupClean(ctrl, w)
 
 	err := a.Load()
 	t.Match(err, errMockMkdir.Error())
@@ -119,13 +119,13 @@ func TestAppLoad_TempFileWriteError(tt *testing.T) {
 	ctrl, w, a := newApp(t)
 	w.EXPECT().OsGeteuid().Return(0)
 	expectMounted(ctrl, w)
-	expectUnloadClean(ctrl, w)
+	expectCleanupClean(ctrl, w)
 	tf := NewMockWorldOsFile(ctrl)
 	w.EXPECT().OsCreateTemp("", "same-cgroup-mark.*.bpf.o").Return(tf, nil)
 	tf.EXPECT().Write(gomock.Any()).Return(0, errMockMkdir)
 	tf.EXPECT().Close().Return(nil)
 	tf.EXPECT().Name().Return("/tmp/test.bpf.o")
-	expectUnloadClean(ctrl, w)
+	expectCleanupClean(ctrl, w)
 
 	err := a.Load()
 	t.Match(err, "write temp file")
@@ -138,13 +138,13 @@ func TestAppLoad_TempFileCloseError(tt *testing.T) {
 	ctrl, w, a := newApp(t)
 	w.EXPECT().OsGeteuid().Return(0)
 	expectMounted(ctrl, w)
-	expectUnloadClean(ctrl, w)
+	expectCleanupClean(ctrl, w)
 	tf := NewMockWorldOsFile(ctrl)
 	w.EXPECT().OsCreateTemp("", "same-cgroup-mark.*.bpf.o").Return(tf, nil)
 	tf.EXPECT().Write(gomock.Any()).Return(len(main.BPFObj), nil)
 	tf.EXPECT().Close().Return(errMockMkdir)
 	tf.EXPECT().Name().Return("/tmp/test.bpf.o")
-	expectUnloadClean(ctrl, w)
+	expectCleanupClean(ctrl, w)
 
 	err := a.Load()
 	t.Match(err, "close temp file")
@@ -184,9 +184,6 @@ func TestAppLoad_CleanupPreviousStateError(tt *testing.T) {
 	ctrl, w, a := newApp(t)
 	w.EXPECT().OsGeteuid().Return(0)
 	expectMounted(ctrl, w)
-	// Initial Unload: prepare + detach + remove + checkUnloaded.
-	w.EXPECT().OsGeteuid().Return(0)
-	w.EXPECT().ExecCommand("mountpoint", "-q", main.BPFRoot).Return(newCmdRun(ctrl, nil))
 	for range 4 {
 		w.EXPECT().ExecCommand("bpftool", "cgroup", "detach",
 			main.CgroupRoot, gomock.Any(), "pinned", gomock.Any(),
@@ -208,12 +205,12 @@ func TestAppLoad_BPFToolLoadallError(tt *testing.T) {
 	ctrl, w, a := newApp(t)
 	w.EXPECT().OsGeteuid().Return(0)
 	expectMounted(ctrl, w)
-	expectUnloadClean(ctrl, w)
+	expectCleanupClean(ctrl, w)
 	expectTempFile(ctrl, w)
 	w.EXPECT().ExecCommand("bpftool", "prog", "loadall",
 		gomock.Any(), main.BPFDir, "pinmaps", main.BPFDir+"/maps",
 	).Return(newCmdRun(ctrl, errMockLoadall))
-	expectUnloadClean(ctrl, w)
+	expectCleanupClean(ctrl, w)
 
 	err := a.Load()
 	t.Match(err, "bpftool loadall")
@@ -226,7 +223,7 @@ func TestAppLoad_AttachError(tt *testing.T) {
 	ctrl, w, a := newApp(t)
 	w.EXPECT().OsGeteuid().Return(0)
 	expectMounted(ctrl, w)
-	expectUnloadClean(ctrl, w)
+	expectCleanupClean(ctrl, w)
 	expectTempFile(ctrl, w)
 	w.EXPECT().ExecCommand("bpftool", "prog", "loadall",
 		gomock.Any(), main.BPFDir, "pinmaps", main.BPFDir+"/maps",
@@ -240,7 +237,7 @@ func TestAppLoad_AttachError(tt *testing.T) {
 		main.CgroupRoot, gomock.Any(), "pinned", gomock.Any(),
 	).Return(newCmdRun(ctrl, errMockAttach))
 
-	expectUnloadRollback(ctrl, w)
+	expectCleanupRollback(ctrl, w)
 
 	err := a.Load()
 	t.Match(err, "attach")
@@ -255,7 +252,7 @@ func TestAppLoad_MountBPFFSSuccess(tt *testing.T) {
 	w.EXPECT().ExecCommand("mountpoint", "-q", main.BPFRoot).Return(newCmdRun(ctrl, errMockNotMounted))
 	w.EXPECT().OsMkdirAll(main.BPFRoot, main.BPFMode).Return(nil)
 	w.EXPECT().ExecCommand("mount", "-t", "bpf", "bpf", main.BPFRoot).Return(newCmdOutput(ctrl, nil, nil))
-	expectUnloadClean(ctrl, w)
+	expectCleanupClean(ctrl, w)
 	expectTempFile(ctrl, w)
 	w.EXPECT().ExecCommand("bpftool", "prog", "loadall",
 		gomock.Any(), main.BPFDir, "pinmaps", main.BPFDir+"/maps",
@@ -276,7 +273,7 @@ func TestAppLoad_Success(tt *testing.T) {
 	ctrl, w, a := newApp(t)
 	w.EXPECT().OsGeteuid().Return(0)
 	expectMounted(ctrl, w)
-	expectUnloadClean(ctrl, w)
+	expectCleanupClean(ctrl, w)
 	expectTempFile(ctrl, w)
 	w.EXPECT().ExecCommand("bpftool", "prog", "loadall",
 		gomock.Any(), main.BPFDir, "pinmaps", main.BPFDir+"/maps",
@@ -372,7 +369,7 @@ func TestAppSetMark_Error(tt *testing.T) {
 	).Return(newCmdRun(ctrl, errMockBpftool))
 
 	err := a.SetMark(main.Mark(0x10000000))
-	t.Match(err, "set mark")
+	t.Match(err, "bpftool map update")
 }
 
 // CgroupAttach.
