@@ -338,17 +338,16 @@ func TestAppLoad_AttachError(tt *testing.T) {
 	t.ExpectCmdRun("bpftool", "prog", "loadall",
 		gomock.Any(), main.BPFDir, "pinmaps", main.BPFDir+"/maps",
 	).Return(nil)
-	for _, att := range main.CgroupAttach()[:3] {
+	entries := main.CgroupAttach()
+	for _, att := range entries[:len(entries)-1] {
 		t.ExpectCmdRun("bpftool", "cgroup", "attach",
 			main.CgroupRoot, att.AttachType, "pinned", filepath.Join(main.BPFDir, att.ProgName),
 		).Return(nil)
 	}
-	{
-		att := main.CgroupAttach()[3]
-		t.ExpectCmdRun("bpftool", "cgroup", "attach",
-			main.CgroupRoot, att.AttachType, "pinned", filepath.Join(main.BPFDir, att.ProgName),
-		).Return(errMockAttach)
-	}
+	lastAtt := entries[len(entries)-1]
+	t.ExpectCmdRun("bpftool", "cgroup", "attach",
+		main.CgroupRoot, lastAtt.AttachType, "pinned", filepath.Join(main.BPFDir, lastAtt.ProgName),
+	).Return(errMockAttach)
 
 	t.ExpectCleanup(nil)
 
