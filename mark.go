@@ -4,11 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strconv"
 )
 
 // Errors.
 var (
-	ErrMarkOverflow = errors.New("mark value exceeds 32-bit maximum (0xFFFFFFFF)")
+	ErrInvalidMarkValue = errors.New("invalid mark value")
+	ErrMarkOverflow     = errors.New("mark value exceeds 32-bit maximum (0xFFFFFFFF)")
 )
 
 // Mark is a validated 32-bit mark value.
@@ -22,16 +24,16 @@ func (m *Mark) UnmarshalText(text []byte) error {
 
 // parse parses a hexadecimal string into a Mark value.
 func (m *Mark) parse(s string) error {
-	if len(s) > 2 && (s[:2] == "0x" || s[:2] == "0X") {
-		s = s[2:]
+	hex := s
+	if len(hex) > 2 && (hex[:2] == "0x" || hex[:2] == "0X") {
+		hex = hex[2:]
 	}
-	var v uint64
-	_, err := fmt.Sscanf(s, "%x", &v)
+	v, err := strconv.ParseUint(hex, 16, 64)
 	if err != nil {
-		return fmt.Errorf("invalid mark value %q: %w", s, err)
+		return fmt.Errorf("%w: %q", ErrInvalidMarkValue, s)
 	}
 	if v > math.MaxUint32 {
-		return fmt.Errorf("%w: 0x%X", ErrMarkOverflow, v)
+		return fmt.Errorf("%w: %q", ErrMarkOverflow, s)
 	}
 	*m = Mark(v)
 	return nil

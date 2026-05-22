@@ -10,7 +10,6 @@ import (
 
 func TestMarkUnmarshalText(tt *testing.T) {
 	tt.Parallel()
-	t := check.T(tt).MustAll()
 
 	tests := []struct {
 		input   string
@@ -27,15 +26,22 @@ func TestMarkUnmarshalText(tt *testing.T) {
 		{"0xFFFFFFFF", 0xFFFFFFFF, ""},
 		{"0x1FFFFFFFF", 0, "mark value exceeds 32-bit maximum"},
 		{"not-a-number", 0, "invalid mark value"},
+		{"1g", 0, "invalid mark value"},
+		{"0x1g", 0, "invalid mark value"},
 	}
 	for _, tc := range tests {
-		var m main.Mark
-		err := m.UnmarshalText([]byte(tc.input))
-		if tc.wantErr != "" {
-			t.Match(err, tc.wantErr)
-		} else {
-			t.Equal(m, tc.want)
-		}
+		tt.Run(tc.input, func(tt *testing.T) {
+			tt.Parallel()
+			t := check.T(tt).MustAll()
+			var m main.Mark
+			err := m.UnmarshalText([]byte(tc.input))
+			if tc.wantErr != "" {
+				t.Match(err, tc.wantErr)
+			} else {
+				t.Nil(err)
+				t.Equal(m, tc.want)
+			}
+		})
 	}
 }
 
