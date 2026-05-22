@@ -4,44 +4,41 @@
 package main
 
 import (
-	"context"
 	"os"
 	"os/exec"
 )
 
 // World abstracts OS and exec dependencies for testability.
 type World interface {
-	CmdRun(ctx context.Context, name string, args ...string) error
-	CmdOutput(name string, args ...string) ([]byte, error)
-	OsCreateTemp(dir, pattern string) (TempFile, error)
+	ExecCommand(name string, args ...string) WorldExecCmd
+	OsCreateTemp(dir, pattern string) (WorldOsFile, error)
 	OsGeteuid() int
 	OsMkdirAll(path string, perm os.FileMode) error
 	OsRemoveAll(path string) error
 	OsStat(name string) (os.FileInfo, error)
 }
 
+// WorldExecCmd abstracts the result of an executed command.
+type WorldExecCmd interface {
+	CombinedOutput() ([]byte, error)
+	Run() error
+}
+
+// WorldOsFile allows mocking [os.File] operations in tests.
+type WorldOsFile interface {
+	Close() error
+	Name() string
+	Write(p []byte) (n int, err error)
+}
+
 // RealWorld implements World with real OS and exec calls.
 type RealWorld struct{}
 
-func (RealWorld) CmdRun(ctx context.Context, name string, args ...string) error {
-	cmd := exec.CommandContext(ctx, name, args...) //nolint:gosec // False positive.
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+func (RealWorld) ExecCommand(name string, args ...string) WorldExecCmd {
+	return exec.Command(name, args...) //nolint:gosec,noctx // False positive; timeout not needed.
 }
 
-func (RealWorld) CmdOutput(name string, args ...string) ([]byte, error) {
-	return exec.CommandContext(context.Background(), name, args...).CombinedOutput() //nolint:gosec // False positive.
-}
-
-// TempFile allows mocking [os.File] operations in tests.
-type TempFile interface {
-	Write(p []byte) (n int, err error)
-	Close() error
-	Name() string
-}
-
-func (RealWorld) OsCreateTemp(dir, pattern string) (TempFile, error) {
+func (RealWorld) OsCreateTemp(dir, pattern string) (WorldOsFile, error) {
 	return os.CreateTemp(dir, pattern)
 }
 

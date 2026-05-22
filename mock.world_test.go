@@ -10,7 +10,6 @@
 package main_test
 
 import (
-	context "context"
 	os "os"
 	reflect "reflect"
 
@@ -42,50 +41,30 @@ func (m *MockWorld) EXPECT() *MockWorldMockRecorder {
 	return m.recorder
 }
 
-// CmdOutput mocks base method.
-func (m *MockWorld) CmdOutput(name string, args ...string) ([]byte, error) {
+// ExecCommand mocks base method.
+func (m *MockWorld) ExecCommand(name string, args ...string) main.WorldExecCmd {
 	m.ctrl.T.Helper()
 	varargs := []any{name}
 	for _, a := range args {
 		varargs = append(varargs, a)
 	}
-	ret := m.ctrl.Call(m, "CmdOutput", varargs...)
-	ret0, _ := ret[0].([]byte)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// CmdOutput indicates an expected call of CmdOutput.
-func (mr *MockWorldMockRecorder) CmdOutput(name any, args ...any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{name}, args...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CmdOutput", reflect.TypeOf((*MockWorld)(nil).CmdOutput), varargs...)
-}
-
-// CmdRun mocks base method.
-func (m *MockWorld) CmdRun(ctx context.Context, name string, args ...string) error {
-	m.ctrl.T.Helper()
-	varargs := []any{ctx, name}
-	for _, a := range args {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "CmdRun", varargs...)
-	ret0, _ := ret[0].(error)
+	ret := m.ctrl.Call(m, "ExecCommand", varargs...)
+	ret0, _ := ret[0].(main.WorldExecCmd)
 	return ret0
 }
 
-// CmdRun indicates an expected call of CmdRun.
-func (mr *MockWorldMockRecorder) CmdRun(ctx, name any, args ...any) *gomock.Call {
+// ExecCommand indicates an expected call of ExecCommand.
+func (mr *MockWorldMockRecorder) ExecCommand(name any, args ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{ctx, name}, args...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CmdRun", reflect.TypeOf((*MockWorld)(nil).CmdRun), varargs...)
+	varargs := append([]any{name}, args...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecCommand", reflect.TypeOf((*MockWorld)(nil).ExecCommand), varargs...)
 }
 
 // OsCreateTemp mocks base method.
-func (m *MockWorld) OsCreateTemp(dir, pattern string) (main.TempFile, error) {
+func (m *MockWorld) OsCreateTemp(dir, pattern string) (main.WorldOsFile, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "OsCreateTemp", dir, pattern)
-	ret0, _ := ret[0].(main.TempFile)
+	ret0, _ := ret[0].(main.WorldOsFile)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -153,32 +132,85 @@ func (mr *MockWorldMockRecorder) OsStat(name any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OsStat", reflect.TypeOf((*MockWorld)(nil).OsStat), name)
 }
 
-// MockTempFile is a mock of TempFile interface.
-type MockTempFile struct {
+// MockWorldExecCmd is a mock of WorldExecCmd interface.
+type MockWorldExecCmd struct {
 	ctrl     *gomock.Controller
-	recorder *MockTempFileMockRecorder
+	recorder *MockWorldExecCmdMockRecorder
 	isgomock struct{}
 }
 
-// MockTempFileMockRecorder is the mock recorder for MockTempFile.
-type MockTempFileMockRecorder struct {
-	mock *MockTempFile
+// MockWorldExecCmdMockRecorder is the mock recorder for MockWorldExecCmd.
+type MockWorldExecCmdMockRecorder struct {
+	mock *MockWorldExecCmd
 }
 
-// NewMockTempFile creates a new mock instance.
-func NewMockTempFile(ctrl *gomock.Controller) *MockTempFile {
-	mock := &MockTempFile{ctrl: ctrl}
-	mock.recorder = &MockTempFileMockRecorder{mock}
+// NewMockWorldExecCmd creates a new mock instance.
+func NewMockWorldExecCmd(ctrl *gomock.Controller) *MockWorldExecCmd {
+	mock := &MockWorldExecCmd{ctrl: ctrl}
+	mock.recorder = &MockWorldExecCmdMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockTempFile) EXPECT() *MockTempFileMockRecorder {
+func (m *MockWorldExecCmd) EXPECT() *MockWorldExecCmdMockRecorder {
+	return m.recorder
+}
+
+// CombinedOutput mocks base method.
+func (m *MockWorldExecCmd) CombinedOutput() ([]byte, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CombinedOutput")
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CombinedOutput indicates an expected call of CombinedOutput.
+func (mr *MockWorldExecCmdMockRecorder) CombinedOutput() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CombinedOutput", reflect.TypeOf((*MockWorldExecCmd)(nil).CombinedOutput))
+}
+
+// Run mocks base method.
+func (m *MockWorldExecCmd) Run() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Run")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Run indicates an expected call of Run.
+func (mr *MockWorldExecCmdMockRecorder) Run() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Run", reflect.TypeOf((*MockWorldExecCmd)(nil).Run))
+}
+
+// MockWorldOsFile is a mock of WorldOsFile interface.
+type MockWorldOsFile struct {
+	ctrl     *gomock.Controller
+	recorder *MockWorldOsFileMockRecorder
+	isgomock struct{}
+}
+
+// MockWorldOsFileMockRecorder is the mock recorder for MockWorldOsFile.
+type MockWorldOsFileMockRecorder struct {
+	mock *MockWorldOsFile
+}
+
+// NewMockWorldOsFile creates a new mock instance.
+func NewMockWorldOsFile(ctrl *gomock.Controller) *MockWorldOsFile {
+	mock := &MockWorldOsFile{ctrl: ctrl}
+	mock.recorder = &MockWorldOsFileMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockWorldOsFile) EXPECT() *MockWorldOsFileMockRecorder {
 	return m.recorder
 }
 
 // Close mocks base method.
-func (m *MockTempFile) Close() error {
+func (m *MockWorldOsFile) Close() error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Close")
 	ret0, _ := ret[0].(error)
@@ -186,13 +218,13 @@ func (m *MockTempFile) Close() error {
 }
 
 // Close indicates an expected call of Close.
-func (mr *MockTempFileMockRecorder) Close() *gomock.Call {
+func (mr *MockWorldOsFileMockRecorder) Close() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockTempFile)(nil).Close))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockWorldOsFile)(nil).Close))
 }
 
 // Name mocks base method.
-func (m *MockTempFile) Name() string {
+func (m *MockWorldOsFile) Name() string {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Name")
 	ret0, _ := ret[0].(string)
@@ -200,13 +232,13 @@ func (m *MockTempFile) Name() string {
 }
 
 // Name indicates an expected call of Name.
-func (mr *MockTempFileMockRecorder) Name() *gomock.Call {
+func (mr *MockWorldOsFileMockRecorder) Name() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Name", reflect.TypeOf((*MockTempFile)(nil).Name))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Name", reflect.TypeOf((*MockWorldOsFile)(nil).Name))
 }
 
 // Write mocks base method.
-func (m *MockTempFile) Write(p []byte) (int, error) {
+func (m *MockWorldOsFile) Write(p []byte) (int, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Write", p)
 	ret0, _ := ret[0].(int)
@@ -215,7 +247,7 @@ func (m *MockTempFile) Write(p []byte) (int, error) {
 }
 
 // Write indicates an expected call of Write.
-func (mr *MockTempFileMockRecorder) Write(p any) *gomock.Call {
+func (mr *MockWorldOsFileMockRecorder) Write(p any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Write", reflect.TypeOf((*MockTempFile)(nil).Write), p)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Write", reflect.TypeOf((*MockWorldOsFile)(nil).Write), p)
 }
