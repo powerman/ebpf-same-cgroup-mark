@@ -3,6 +3,7 @@ package main_test
 import (
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -490,6 +491,30 @@ func TestAppUnload_CheckUnloadedCgroupShowError(tt *testing.T) {
 
 	err := t.App.Unload()
 	t.Match(err, "cannot verify cgroup attachments")
+}
+
+func TestAppUnload_CheckUnloadedCgroupShowExitCode2(tt *testing.T) {
+	tt.Parallel()
+	t := newTestApp(tt)
+
+	cmd := exec.Command("sh", "-c", "exit 2") //nolint:noctx // Trivial, exits immediately.
+	exitErr2 := cmd.Run()
+
+	t.ExpectRootCheckSuccess()
+	t.ExpectMounted()
+	for _, att := range main.CgroupAttach() {
+		t.ExpectCmdRun("bpftool", "cgroup", "detach",
+			main.CgroupRoot, att.AttachType, "pinned", filepath.Join(main.BPFDir, att.ProgName),
+		).Return(errMockRemove)
+	}
+	t.Expect.OsRemoveAll(main.BPFDir).Return(nil)
+	// checkUnloaded: BPF pin directory cleaned.
+	t.Expect.OsStat(main.BPFDir).Return(nil, os.ErrNotExist)
+	// checkUnloaded: bpftool cgroup show exits with code 2 (no programs).
+	t.ExpectCmdStdout("bpftool", "--json", "cgroup", "show", main.CgroupRoot).Return(nil, exitErr2)
+
+	err := t.App.Unload()
+	t.Nil(err)
 }
 
 func TestAppUnload_CheckUnloadedCgroupShowJSONError(tt *testing.T) {

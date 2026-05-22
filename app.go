@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"os/exec"
 	"path/filepath"
 	"slices"
 )
@@ -255,6 +256,10 @@ func (a *app) bpftoolMapUpdateMark(m Mark) error {
 func (a *app) bpftoolCgroupShow() ([]CgroupAttachEntry, error) {
 	out, err := a.ExecCommand("bpftool", "--json", "cgroup", "show", CgroupRoot).Output()
 	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == 2 {
+			return nil, nil
+		}
 		return nil, err
 	}
 	var attaches []CgroupAttachEntry
