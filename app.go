@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
 	"path/filepath"
 )
 
@@ -84,7 +83,7 @@ func (a *app) load() (err error) {
 	if err != nil {
 		return err
 	}
-	defer os.Remove(bpfObjPath) //nolint:errcheck // Cleanup on best-effort basis.
+	defer a.OsRemove(bpfObjPath) //nolint:errcheck // Cleanup on best-effort basis.
 
 	err = a.bpftoolLoadAll(bpfObjPath)
 	if err != nil {
@@ -177,12 +176,12 @@ func (a *app) writeTempBPFObj() (string, error) {
 	_, err = f.Write(BPFObj)
 	if err != nil {
 		_ = f.Close()
-		_ = os.Remove(f.Name())
+		_ = a.OsRemove(f.Name())
 		return "", fmt.Errorf("write temp file: %w", err)
 	}
 	err = f.Close()
 	if err != nil {
-		_ = os.Remove(f.Name())
+		_ = a.OsRemove(f.Name())
 		return "", fmt.Errorf("close temp file: %w", err)
 	}
 	return f.Name(), nil
@@ -193,7 +192,7 @@ func (a *app) checkUnloaded() error {
 	var errs error
 
 	_, err := a.OsStat(BPFDir)
-	if !os.IsNotExist(err) {
+	if !a.OsIsNotExist(err) {
 		errs = errors.Join(errs, fmt.Errorf("%w: %s", errBPFDirExists, BPFDir))
 	}
 

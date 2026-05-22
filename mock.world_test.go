@@ -89,6 +89,20 @@ func (mr *MockWorldMockRecorder) OsGeteuid() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OsGeteuid", reflect.TypeOf((*MockWorld)(nil).OsGeteuid))
 }
 
+// OsIsNotExist mocks base method.
+func (m *MockWorld) OsIsNotExist(err error) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "OsIsNotExist", err)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// OsIsNotExist indicates an expected call of OsIsNotExist.
+func (mr *MockWorldMockRecorder) OsIsNotExist(err any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OsIsNotExist", reflect.TypeOf((*MockWorld)(nil).OsIsNotExist), err)
+}
+
 // OsMkdirAll mocks base method.
 func (m *MockWorld) OsMkdirAll(path string, perm os.FileMode) error {
 	m.ctrl.T.Helper()
@@ -101,6 +115,20 @@ func (m *MockWorld) OsMkdirAll(path string, perm os.FileMode) error {
 func (mr *MockWorldMockRecorder) OsMkdirAll(path, perm any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OsMkdirAll", reflect.TypeOf((*MockWorld)(nil).OsMkdirAll), path, perm)
+}
+
+// OsRemove mocks base method.
+func (m *MockWorld) OsRemove(name string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "OsRemove", name)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// OsRemove indicates an expected call of OsRemove.
+func (mr *MockWorldMockRecorder) OsRemove(name any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OsRemove", reflect.TypeOf((*MockWorld)(nil).OsRemove), name)
 }
 
 // OsRemoveAll mocks base method.

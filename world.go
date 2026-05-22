@@ -13,7 +13,9 @@ type World interface {
 	ExecCommand(name string, args ...string) WorldExecCmd
 	OsCreateTemp(dir, pattern string) (WorldOsFile, error)
 	OsGeteuid() int
+	OsIsNotExist(err error) bool
 	OsMkdirAll(path string, perm os.FileMode) error
+	OsRemove(name string) error
 	OsRemoveAll(path string) error
 	OsStat(name string) (os.FileInfo, error)
 }
@@ -43,6 +45,8 @@ func (RealWorld) OsCreateTemp(dir, pattern string) (WorldOsFile, error) {
 }
 
 func (RealWorld) OsGeteuid() int                                 { return os.Geteuid() }
+func (RealWorld) OsIsNotExist(err error) bool                    { return os.IsNotExist(err) }
 func (RealWorld) OsMkdirAll(path string, perm os.FileMode) error { return os.MkdirAll(path, perm) }
 func (RealWorld) OsRemoveAll(path string) error                  { return os.RemoveAll(path) }
+func (RealWorld) OsRemove(name string) error                     { return os.Remove(name) }
 func (RealWorld) OsStat(name string) (os.FileInfo, error)        { return os.Stat(name) }
