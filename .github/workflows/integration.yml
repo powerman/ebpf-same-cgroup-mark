@@ -26,7 +26,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            bpftool clang llvm libbpf-dev netcat-openbsd nftables
+            linux-tools-common "linux-tools-$(uname -r)" \
+            clang llvm libbpf-dev netcat-openbsd nftables
 
       - uses: jdx/mise-action@v4
       - run: git reset --hard # Work around https://github.com/jdx/mise/discussions/8270.
