@@ -1,4 +1,4 @@
-# Origin: https://github.com/powerman/golangci-lint-strict version 2.11.4
+# Origin: https://github.com/powerman/golangci-lint-strict version 2.12.2
 version: "2"
 linters:
   default: all
@@ -10,6 +10,7 @@ linters:
     - dupl
     - forcetypeassert # Questionable (often we actually want panic).
     - gocyclo # Prefer gocognit.
+    - gomodguard # Deprecated.
     - interfacebloat # Questionable.
     - ireturn # Questionable (is returning unexported types better?).
     - lll # Questionable (sometimes long lines improve readability).
@@ -108,12 +109,11 @@ linters:
         - BUG # Marks issues that should be moved to issue tracker before merging.
         - FIXME # Marks issues that should be resolved before merging.
         - DEBUG # Marks temporary code that should be removed before merging.
-    gomodguard:
+    gomodguard_v2:
       blocked:
-        versions:
-          - github.com/cenkalti/backoff:
-              version: < 4.0.0
-              reason: use actual version
+        - module: github.com/cenkalti/backoff
+          version: < 4.0.0
+          reason: use actual version
     gosec:
       excludes:
         - G104 # Audit errors not checked
@@ -154,8 +154,7 @@ linters:
       require-explanation: true # Disable linters this way: //nolint:first,second // Reason here.
       require-specific: true # Do not allow //nolint without specific linter name(s).
     paralleltest:
-      ignore-missing: true # Do not require `t.Parallel()` everywhere.
-      ignore-missing-subtests: true # Do not require `t.Parallel()` in all subtests.
+      check-cleanup: true
     reassign:
       patterns:
         - .* # Check all global variables.
@@ -303,12 +302,12 @@ linters:
       context: scope
       static-msg: true
       msg-style: capitalized
-      key-naming-case: snake
       forbidden-keys:
         - time # Used by standard slog.JSONHandler or slog.TextHandler.
         - level # Used by standard slog.JSONHandler or slog.TextHandler.
         - msg # Used by standard slog.JSONHandler or slog.TextHandler.
         - source # Used by standard slog.JSONHandler or slog.TextHandler.
+      key-naming-case: snake
     tagalign:
       order:
         - json
