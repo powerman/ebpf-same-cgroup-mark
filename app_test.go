@@ -410,6 +410,47 @@ func TestAppUnload_WithBPF(tt *testing.T) {
 	t.Nil(t.App.Unload())
 }
 
+func TestAppUnload_CheckUnloadedBPFDirExists(tt *testing.T) {
+	tt.Parallel()
+	t := newTest(tt)
+
+	t.expectRootCheckSuccess()
+	t.ExpectMounted()
+	for _, att := range main.CgroupAttach() {
+		t.ExpectCmdRun("bpftool", "cgroup", "detach",
+			main.CgroupRoot, att.AttachType, "pinned", filepath.Join(main.BPFDir, att.ProgName),
+		).Return(errMockRemove)
+	}
+	t.Expect.OsRemoveAll(main.BPFDir).Return(nil)
+	// checkUnloaded: BPF pin directory still exists.
+	t.Expect.OsStat(main.BPFDir).Return(nil, nil)
+	t.ExpectCmdOutput("bpftool", "cgroup", "show", main.CgroupRoot).Return(nil, nil)
+
+	err := t.App.Unload()
+	t.Match(err, "BPF pin directory still exists")
+}
+
+func TestAppUnload_CheckUnloadedCgroupShowError(tt *testing.T) {
+	tt.Parallel()
+	t := newTest(tt)
+
+	t.expectRootCheckSuccess()
+	t.ExpectMounted()
+	for _, att := range main.CgroupAttach() {
+		t.ExpectCmdRun("bpftool", "cgroup", "detach",
+			main.CgroupRoot, att.AttachType, "pinned", filepath.Join(main.BPFDir, att.ProgName),
+		).Return(errMockRemove)
+	}
+	t.Expect.OsRemoveAll(main.BPFDir).Return(nil)
+	// checkUnloaded: BPF pin directory cleaned.
+	t.Expect.OsStat(main.BPFDir).Return(nil, os.ErrNotExist)
+	// checkUnloaded: bpftool cgroup show fails.
+	t.ExpectCmdOutput("bpftool", "cgroup", "show", main.CgroupRoot).Return(nil, errMockBpftool)
+
+	err := t.App.Unload()
+	t.Match(err, "cannot verify cgroup attachments")
+}
+
 // SetMark.
 
 func TestAppSetMark_Do(tt *testing.T) {
