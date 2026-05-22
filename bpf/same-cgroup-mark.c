@@ -8,8 +8,6 @@
 #include <bpf/bpf_helpers.h>
 
 #define DEFAULT_SAME_CGROUP_MARK 0x40000000U
-#define AF_INET 2
-#define AF_INET6 10
 #define SOCK_STREAM 1
 #define SOL_SOCKET 1
 #define SO_MARK 36
