@@ -188,6 +188,28 @@ func (t *testApp) newCmdOutput(out []byte, err error) *MockWorldExecCmd {
 	return result
 }
 
+type cmdStdoutExpectation struct {
+	t    *testApp
+	args []any
+}
+
+// ExpectCmdStdout creates an expectation for ExecCommand(args...) that returns
+// a mock command whose Output() is configured to return the given (out, err).
+func (t *testApp) ExpectCmdStdout(args ...any) *cmdStdoutExpectation {
+	return &cmdStdoutExpectation{t: t, args: args}
+}
+
+func (e *cmdStdoutExpectation) Return(out []byte, err error) {
+	e.t.Expect.ExecCommand(e.args[0], e.args[1:]...).Return(e.t.newCmdStdout(out, err))
+}
+
+// newCmdStdout creates a MockWorldExecCmd whose Output() returns (out, err).
+func (t *testApp) newCmdStdout(out []byte, err error) *MockWorldExecCmd {
+	result := NewMockWorldExecCmd(t.Ctrl)
+	result.EXPECT().Output().Return(out, err)
+	return result
+}
+
 // ExpectTempFile sets up successful temp file creation for testing file operations.
 func (t *testApp) ExpectTempFile() {
 	tf := NewMockWorldOsFile(t.Ctrl)
@@ -214,7 +236,7 @@ func (t *testApp) ExpectCleanup(detachErr error) {
 	}
 	t.Expect.OsRemoveAll(main.BPFDir).Return(nil)
 	t.Expect.OsStat(main.BPFDir).Return(nil, os.ErrNotExist)
-	t.ExpectCmdOutput("bpftool", "cgroup", "show", main.CgroupRoot).Return(nil, nil)
+	t.ExpectCmdStdout("bpftool", "--json", "cgroup", "show", main.CgroupRoot).Return([]byte("[]"), nil)
 }
 
 // ExpectTempFileError sets up expectations for a temp file operation
@@ -304,7 +326,8 @@ func TestAppLoad_CleanupPreviousStateError(tt *testing.T) {
 	t.Expect.OsRemoveAll(main.BPFDir).Return(nil)
 	// checkUnloaded: program still attached (cgroup show still mentions it).
 	t.Expect.OsStat(main.BPFDir).Return(nil, os.ErrNotExist)
-	t.ExpectCmdOutput("bpftool", "cgroup", "show", main.CgroupRoot).Return([]byte("same_cgroup_bind4"), nil)
+	attaches := []byte(`[{"name":"same_cgroup_bind4","attach_type":"cgroup_inet4_bind"}]`)
+	t.ExpectCmdStdout("bpftool", "--json", "cgroup", "show", main.CgroupRoot).Return(attaches, nil)
 
 	err := t.App.Load()
 	t.Match(err, "cleanup previous state")
@@ -421,7 +444,7 @@ func TestAppUnload_CheckUnloadedBPFDirExists(tt *testing.T) {
 	t.Expect.OsRemoveAll(main.BPFDir).Return(nil)
 	// checkUnloaded: BPF pin directory still exists.
 	t.Expect.OsStat(main.BPFDir).Return(nil, nil)
-	t.ExpectCmdOutput("bpftool", "cgroup", "show", main.CgroupRoot).Return(nil, nil)
+	t.ExpectCmdStdout("bpftool", "--json", "cgroup", "show", main.CgroupRoot).Return([]byte("[]"), nil)
 
 	err := t.App.Unload()
 	t.Match(err, "BPF pin directory still exists")
@@ -442,10 +465,30 @@ func TestAppUnload_CheckUnloadedCgroupShowError(tt *testing.T) {
 	// checkUnloaded: BPF pin directory cleaned.
 	t.Expect.OsStat(main.BPFDir).Return(nil, os.ErrNotExist)
 	// checkUnloaded: bpftool cgroup show fails.
-	t.ExpectCmdOutput("bpftool", "cgroup", "show", main.CgroupRoot).Return(nil, errMockBpftool)
+	t.ExpectCmdStdout("bpftool", "--json", "cgroup", "show", main.CgroupRoot).Return(nil, errMockBpftool)
 
 	err := t.App.Unload()
 	t.Match(err, "cannot verify cgroup attachments")
+}
+
+func TestAppUnload_CheckUnloadedCgroupShowJSONError(tt *testing.T) {
+	tt.Parallel()
+	t := newTestApp(tt)
+
+	t.ExpectRootCheckSuccess()
+	t.ExpectMounted()
+	for _, att := range main.CgroupAttach() {
+		t.ExpectCmdRun("bpftool", "cgroup", "detach",
+			main.CgroupRoot, att.AttachType, "pinned", filepath.Join(main.BPFDir, att.ProgName),
+		).Return(errMockRemove)
+	}
+	t.Expect.OsRemoveAll(main.BPFDir).Return(nil)
+	t.Expect.OsStat(main.BPFDir).Return(nil, os.ErrNotExist)
+	t.ExpectCmdStdout("bpftool", "--json", "cgroup", "show", main.CgroupRoot).Return([]byte("not-json"), nil)
+
+	err := t.App.Unload()
+	t.Match(err, "cannot verify cgroup attachments")
+	t.Match(err, "parse bpftool cgroup")
 }
 
 // SetMark.

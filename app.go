@@ -3,12 +3,13 @@
 package main
 
 import (
-	"bytes"
 	_ "embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
 	"path/filepath"
+	"slices"
 )
 
 // BPFObj is the embedded eBPF object file compiled from same-cgroup-mark.bpf.c.
@@ -33,7 +34,8 @@ var (
 
 // CgroupAttachEntry represents a single eBPF program and its corresponding cgroup attach type.
 type CgroupAttachEntry struct {
-	ProgName, AttachType string
+	ProgName   string `json:"name"`
+	AttachType string `json:"attach_type"`
 }
 
 // CgroupAttach returns the list of eBPF programs and their corresponding cgroup attach types.
@@ -196,12 +198,12 @@ func (a *app) checkUnloaded() error {
 		errs = errors.Join(errs, fmt.Errorf("%w: %s", errBPFDirExists, BPFDir))
 	}
 
-	out, err := a.bpftoolCgroupShow()
+	attaches, err := a.bpftoolCgroupShow()
 	if err != nil {
 		errs = errors.Join(errs, fmt.Errorf("cannot verify cgroup attachments: %w", err))
 	} else {
 		for _, att := range CgroupAttach() {
-			if bytes.Contains(out, []byte(att.ProgName)) {
+			if slices.Contains(attaches, att) {
 				errs = errors.Join(errs, fmt.Errorf("%w: %s", errProgAttached, att.ProgName))
 			}
 		}
@@ -245,6 +247,15 @@ func (a *app) bpftoolMapUpdateMark(m Mark) error {
 	).Run()
 }
 
-func (a *app) bpftoolCgroupShow() ([]byte, error) {
-	return a.ExecCommand("bpftool", "cgroup", "show", CgroupRoot).CombinedOutput()
+func (a *app) bpftoolCgroupShow() ([]CgroupAttachEntry, error) {
+	out, err := a.ExecCommand("bpftool", "--json", "cgroup", "show", CgroupRoot).Output()
+	if err != nil {
+		return nil, err
+	}
+	var attaches []CgroupAttachEntry
+	err = json.Unmarshal(out, &attaches)
+	if err != nil {
+		return nil, fmt.Errorf("parse bpftool cgroup: %w", err)
+	}
+	return attaches, nil
 }

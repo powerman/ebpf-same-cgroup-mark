@@ -185,6 +185,21 @@ func (mr *MockWorldExecCmdMockRecorder) CombinedOutput() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CombinedOutput", reflect.TypeOf((*MockWorldExecCmd)(nil).CombinedOutput))
 }
 
+// Output mocks base method.
+func (m *MockWorldExecCmd) Output() ([]byte, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Output")
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Output indicates an expected call of Output.
+func (mr *MockWorldExecCmdMockRecorder) Output() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Output", reflect.TypeOf((*MockWorldExecCmd)(nil).Output))
+}
+
 // Run mocks base method.
 func (m *MockWorldExecCmd) Run() error {
 	m.ctrl.T.Helper()

@@ -22,6 +22,7 @@ type World interface {
 // WorldExecCmd abstracts the result of an executed command.
 type WorldExecCmd interface {
 	CombinedOutput() ([]byte, error)
+	Output() ([]byte, error)
 	Run() error
 }
 
