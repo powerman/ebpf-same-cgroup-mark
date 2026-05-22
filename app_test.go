@@ -21,6 +21,7 @@ var (
 	errMockMountFailed = errors.New("mock mount failed error")
 	errMockNotMounted  = errors.New("mock not mounted error")
 	errMockRemove      = errors.New("mock remove error")
+	errMockStat        = errors.New("mock stat error")
 )
 
 func TestCgroupAttach(tt *testing.T) {
@@ -448,6 +449,26 @@ func TestAppUnload_CheckUnloadedBPFDirExists(tt *testing.T) {
 
 	err := t.App.Unload()
 	t.Match(err, "BPF pin directory still exists")
+}
+
+func TestAppUnload_CheckUnloadedBPFDirStatError(tt *testing.T) {
+	tt.Parallel()
+	t := newTestApp(tt)
+
+	t.ExpectRootCheckSuccess()
+	t.ExpectMounted()
+	for _, att := range main.CgroupAttach() {
+		t.ExpectCmdRun("bpftool", "cgroup", "detach",
+			main.CgroupRoot, att.AttachType, "pinned", filepath.Join(main.BPFDir, att.ProgName),
+		).Return(errMockRemove)
+	}
+	t.Expect.OsRemoveAll(main.BPFDir).Return(nil)
+	// checkUnloaded: stat returns an unrelated error (not ErrNotExist).
+	t.Expect.OsStat(main.BPFDir).Return(nil, errMockStat)
+	t.ExpectCmdStdout("bpftool", "--json", "cgroup", "show", main.CgroupRoot).Return([]byte("[]"), nil)
+
+	err := t.App.Unload()
+	t.Match(err, "stat BPF pin dir")
 }
 
 func TestAppUnload_CheckUnloadedCgroupShowError(tt *testing.T) {

@@ -193,9 +193,14 @@ func (a *app) writeTempBPFObj() (string, error) {
 func (a *app) checkUnloaded() error {
 	var errs error
 
-	_, err := a.OsStat(BPFDir)
-	if !errors.Is(err, fs.ErrNotExist) {
+	_, statErr := a.OsStat(BPFDir)
+	switch {
+	case statErr == nil:
 		errs = errors.Join(errs, fmt.Errorf("%w: %s", errBPFDirExists, BPFDir))
+	case errors.Is(statErr, fs.ErrNotExist):
+		// Directory is gone, as expected.
+	default:
+		errs = errors.Join(errs, fmt.Errorf("stat BPF pin dir: %w", statErr))
 	}
 
 	attaches, err := a.bpftoolCgroupShow()
