@@ -35,7 +35,7 @@ func TestCgroupAttach(tt *testing.T) {
 	t.Equal(entries[3], main.CgroupAttachEntry{"same_cgroup_connect6", "cgroup_inet6_connect"})
 }
 
-type test struct {
+type testApp struct {
 	*check.C
 
 	Ctrl      *gomock.Controller
@@ -44,9 +44,9 @@ type test struct {
 	App       main.App
 }
 
-func newTest(tt *testing.T) *test {
+func newTestApp(tt *testing.T) *testApp {
 	tt.Helper()
-	t := &test{C: check.T(tt).MustAll()}
+	t := &testApp{C: check.T(tt).MustAll()}
 
 	t.Ctrl = gomock.NewController(t)
 	t.MockWorld = NewMockWorld(t.Ctrl)
@@ -63,62 +63,62 @@ func newTest(tt *testing.T) *test {
 //   - success (BPFFS already mounted, mount fresh)
 //
 // setup must set method-specific success expectations.
-func (t *test) TestDo(setup func(), method func() error) {
+func (t *testApp) TestDo(setup func(), method func() error) {
 	t.Helper()
 
-	t.expectRootCheckError()
+	t.ExpectRootCheckError()
 	t.Err(method(), main.ErrMustBeRoot)
 
-	t.expectRootCheckSuccess()
-	t.expectEnsureBPFFSMkdirError()
+	t.ExpectRootCheckSuccess()
+	t.ExpectEnsureBPFFSMkdirError()
 	t.Match(method(), errMockMkdir.Error())
 
-	t.expectRootCheckSuccess()
-	t.expectEnsureBPFFSMountError()
+	t.ExpectRootCheckSuccess()
+	t.ExpectEnsureBPFFSMountError()
 	t.Match(method(), "mount bpf")
 
-	t.expectRootCheckSuccess()
-	t.expectEnsureBPFFSMounted()
+	t.ExpectRootCheckSuccess()
+	t.ExpectEnsureBPFFSMounted()
 	setup()
 	t.Nil(method())
 
-	t.expectRootCheckSuccess()
-	t.expectEnsureBPFFSMount()
+	t.ExpectRootCheckSuccess()
+	t.ExpectEnsureBPFFSMount()
 	setup()
 	t.Nil(method())
 }
 
-func (t *test) expectRootCheckError() {
+func (t *testApp) ExpectRootCheckError() {
 	t.Expect.OsGeteuid().Return(1000)
 }
 
-func (t *test) expectRootCheckSuccess() {
+func (t *testApp) ExpectRootCheckSuccess() {
 	t.Expect.OsGeteuid().Return(0)
 }
 
-func (t *test) expectEnsureBPFFSMounted() {
+func (t *testApp) ExpectEnsureBPFFSMounted() {
 	t.ExpectCmdRun("mountpoint", "-q", main.BPFRoot).Return(nil)
 }
 
-func (t *test) expectEnsureBPFFSMkdirError() {
+func (t *testApp) ExpectEnsureBPFFSMkdirError() {
 	t.ExpectCmdRun("mountpoint", "-q", main.BPFRoot).Return(errMockNotMounted)
 	t.Expect.OsMkdirAll(main.BPFRoot, main.BPFMode).Return(errMockMkdir)
 }
 
-func (t *test) expectEnsureBPFFSMountError() {
+func (t *testApp) ExpectEnsureBPFFSMountError() {
 	t.ExpectCmdRun("mountpoint", "-q", main.BPFRoot).Return(errMockNotMounted)
 	t.Expect.OsMkdirAll(main.BPFRoot, main.BPFMode).Return(nil)
 	t.ExpectCmdOutput("mount", "-t", "bpf", "bpf", main.BPFRoot).Return([]byte("mount failure details"), errMockMountFailed)
 }
 
-func (t *test) expectEnsureBPFFSMount() {
+func (t *testApp) ExpectEnsureBPFFSMount() {
 	t.ExpectCmdRun("mountpoint", "-q", main.BPFRoot).Return(errMockNotMounted)
 	t.Expect.OsMkdirAll(main.BPFRoot, main.BPFMode).Return(nil)
 	t.ExpectCmdOutput("mount", "-t", "bpf", "bpf", main.BPFRoot).Return(nil, nil)
 }
 
-// expectLoadSuccess sets up successful Load-specific expectations (cleanup, temp file, loadall, attach).
-func (t *test) expectLoadSuccess() {
+// ExpectLoadSuccess sets up successful Load-specific expectations (cleanup, temp file, loadall, attach).
+func (t *testApp) ExpectLoadSuccess() {
 	t.ExpectCleanup(errMockRemove)
 	t.ExpectTempFile()
 	t.ExpectCmdRun("bpftool", "prog", "loadall",
@@ -131,13 +131,13 @@ func (t *test) expectLoadSuccess() {
 	}
 }
 
-// expectUnloadSuccess sets up successful Unload-specific expectations (cleanup).
-func (t *test) expectUnloadSuccess() {
+// ExpectUnloadSuccess sets up successful Unload-specific expectations (cleanup).
+func (t *testApp) ExpectUnloadSuccess() {
 	t.ExpectCleanup(errMockRemove)
 }
 
-// expectSetMarkSuccess sets up successful SetMark-specific expectations (bpftool map update).
-func (t *test) expectSetMarkSuccess() {
+// ExpectSetMarkSuccess sets up successful SetMark-specific expectations (bpftool map update).
+func (t *testApp) ExpectSetMarkSuccess() {
 	t.ExpectCmdRun("bpftool", "map", "update",
 		"pinned", main.BPFDir+"/maps/same_cgroup_mark_cfg",
 		"key", "hex", "00", "00", "00", "00",
@@ -146,13 +146,13 @@ func (t *test) expectSetMarkSuccess() {
 }
 
 type cmdRunExpectation struct {
-	t    *test
+	t    *testApp
 	args []any
 }
 
 // ExpectCmdRun creates an expectation for ExecCommand(args...) that returns
 // a mock command whose Run() is configured to return the given error.
-func (t *test) ExpectCmdRun(args ...any) *cmdRunExpectation {
+func (t *testApp) ExpectCmdRun(args ...any) *cmdRunExpectation {
 	return &cmdRunExpectation{t: t, args: args}
 }
 
@@ -161,13 +161,13 @@ func (e *cmdRunExpectation) Return(err error) {
 }
 
 type cmdOutputExpectation struct {
-	t    *test
+	t    *testApp
 	args []any
 }
 
 // ExpectCmdOutput creates an expectation for ExecCommand(args...) that returns
 // a mock command whose CombinedOutput() is configured to return the given (out, err).
-func (t *test) ExpectCmdOutput(args ...any) *cmdOutputExpectation {
+func (t *testApp) ExpectCmdOutput(args ...any) *cmdOutputExpectation {
 	return &cmdOutputExpectation{t: t, args: args}
 }
 
@@ -176,21 +176,21 @@ func (e *cmdOutputExpectation) Return(out []byte, err error) {
 }
 
 // newCmdRun creates a MockWorldExecCmd whose Run() returns err.
-func (t *test) newCmdRun(err error) *MockWorldExecCmd {
+func (t *testApp) newCmdRun(err error) *MockWorldExecCmd {
 	result := NewMockWorldExecCmd(t.Ctrl)
 	result.EXPECT().Run().Return(err)
 	return result
 }
 
 // newCmdOutput creates a MockWorldExecCmd whose CombinedOutput() returns (out, err).
-func (t *test) newCmdOutput(out []byte, err error) *MockWorldExecCmd {
+func (t *testApp) newCmdOutput(out []byte, err error) *MockWorldExecCmd {
 	result := NewMockWorldExecCmd(t.Ctrl)
 	result.EXPECT().CombinedOutput().Return(out, err)
 	return result
 }
 
 // ExpectTempFile sets up successful temp file creation for testing file operations.
-func (t *test) ExpectTempFile() {
+func (t *testApp) ExpectTempFile() {
 	tf := NewMockWorldOsFile(t.Ctrl)
 	t.Expect.OsCreateTemp("", "same-cgroup-mark.*.bpf.o").Return(tf, nil)
 	tf.EXPECT().Write(main.BPFObj).Return(len(main.BPFObj), nil)
@@ -200,14 +200,14 @@ func (t *test) ExpectTempFile() {
 }
 
 // ExpectMounted sets up successful ensureBPFFS (already mounted).
-func (t *test) ExpectMounted() {
+func (t *testApp) ExpectMounted() {
 	t.ExpectCmdRun("mountpoint", "-q", main.BPFRoot).Return(nil)
 }
 
 // ExpectCleanup sets up the private unload cleanup expectations.
 // detachErr controls whether detach returns error (clean state) or nil (BPF state present).
 // Does NOT include prepare/rootcheck — use when calling private unload directly.
-func (t *test) ExpectCleanup(detachErr error) {
+func (t *testApp) ExpectCleanup(detachErr error) {
 	for _, att := range main.CgroupAttach() {
 		t.ExpectCmdRun("bpftool", "cgroup", "detach",
 			main.CgroupRoot, att.AttachType, "pinned", filepath.Join(main.BPFDir, att.ProgName),
@@ -218,13 +218,13 @@ func (t *test) ExpectCleanup(detachErr error) {
 	t.ExpectCmdOutput("bpftool", "cgroup", "show", main.CgroupRoot).Return(nil, nil)
 }
 
-// expectTempFileError sets up expectations for a temp file operation
+// ExpectTempFileError sets up expectations for a temp file operation
 // that fails at the given stage:
 //
 //	createErr != nil → OsCreateTemp fails, no file created
 //	writeErr  != nil → file created, Write fails
 //	closeErr  != nil → file created, Write succeeds, Close fails
-func (t *test) expectTempFileError(createErr, writeErr, closeErr error) {
+func (t *testApp) ExpectTempFileError(createErr, writeErr, closeErr error) {
 	if createErr != nil {
 		t.Expect.OsCreateTemp("", "same-cgroup-mark.*.bpf.o").Return(nil, createErr)
 		return
@@ -245,18 +245,18 @@ func (t *test) expectTempFileError(createErr, writeErr, closeErr error) {
 
 func TestAppLoad_Do(tt *testing.T) {
 	tt.Parallel()
-	t := newTest(tt)
-	t.TestDo(t.expectLoadSuccess, t.App.Load)
+	t := newTestApp(tt)
+	t.TestDo(t.ExpectLoadSuccess, t.App.Load)
 }
 
 func TestAppLoad_WriteTempBPFObjError(tt *testing.T) {
 	tt.Parallel()
-	t := newTest(tt)
+	t := newTestApp(tt)
 
-	t.expectRootCheckSuccess()
+	t.ExpectRootCheckSuccess()
 	t.ExpectMounted()
 	t.ExpectCleanup(errMockRemove)
-	t.expectTempFileError(errMockMkdir, nil, nil)
+	t.ExpectTempFileError(errMockMkdir, nil, nil)
 	t.ExpectCleanup(errMockRemove)
 
 	err := t.App.Load()
@@ -265,12 +265,12 @@ func TestAppLoad_WriteTempBPFObjError(tt *testing.T) {
 
 func TestAppLoad_TempFileWriteError(tt *testing.T) {
 	tt.Parallel()
-	t := newTest(tt)
+	t := newTestApp(tt)
 
-	t.expectRootCheckSuccess()
+	t.ExpectRootCheckSuccess()
 	t.ExpectMounted()
 	t.ExpectCleanup(errMockRemove)
-	t.expectTempFileError(nil, errMockMkdir, nil)
+	t.ExpectTempFileError(nil, errMockMkdir, nil)
 	t.ExpectCleanup(errMockRemove)
 
 	err := t.App.Load()
@@ -279,12 +279,12 @@ func TestAppLoad_TempFileWriteError(tt *testing.T) {
 
 func TestAppLoad_TempFileCloseError(tt *testing.T) {
 	tt.Parallel()
-	t := newTest(tt)
+	t := newTestApp(tt)
 
-	t.expectRootCheckSuccess()
+	t.ExpectRootCheckSuccess()
 	t.ExpectMounted()
 	t.ExpectCleanup(errMockRemove)
-	t.expectTempFileError(nil, nil, errMockMkdir)
+	t.ExpectTempFileError(nil, nil, errMockMkdir)
 	t.ExpectCleanup(errMockRemove)
 
 	err := t.App.Load()
@@ -293,9 +293,9 @@ func TestAppLoad_TempFileCloseError(tt *testing.T) {
 
 func TestAppLoad_CleanupPreviousStateError(tt *testing.T) {
 	tt.Parallel()
-	t := newTest(tt)
+	t := newTestApp(tt)
 
-	t.expectRootCheckSuccess()
+	t.ExpectRootCheckSuccess()
 	t.ExpectMounted()
 	for _, att := range main.CgroupAttach() {
 		t.ExpectCmdRun("bpftool", "cgroup", "detach",
@@ -313,9 +313,9 @@ func TestAppLoad_CleanupPreviousStateError(tt *testing.T) {
 
 func TestAppLoad_BPFToolLoadallError(tt *testing.T) {
 	tt.Parallel()
-	t := newTest(tt)
+	t := newTestApp(tt)
 
-	t.expectRootCheckSuccess()
+	t.ExpectRootCheckSuccess()
 	t.ExpectMounted()
 	t.ExpectCleanup(errMockRemove)
 	t.ExpectTempFile()
@@ -330,9 +330,9 @@ func TestAppLoad_BPFToolLoadallError(tt *testing.T) {
 
 func TestAppLoad_AttachError(tt *testing.T) {
 	tt.Parallel()
-	t := newTest(tt)
+	t := newTestApp(tt)
 
-	t.expectRootCheckSuccess()
+	t.ExpectRootCheckSuccess()
 	t.ExpectMounted()
 	t.ExpectCleanup(errMockRemove)
 	t.ExpectTempFile()
@@ -359,22 +359,22 @@ func TestAppLoad_AttachError(tt *testing.T) {
 
 func TestAppLoad_MountBPFFSSuccess(tt *testing.T) {
 	tt.Parallel()
-	t := newTest(tt)
+	t := newTestApp(tt)
 
-	t.expectRootCheckSuccess()
-	t.expectEnsureBPFFSMount()
-	t.expectLoadSuccess()
+	t.ExpectRootCheckSuccess()
+	t.ExpectEnsureBPFFSMount()
+	t.ExpectLoadSuccess()
 
 	t.Nil(t.App.Load())
 }
 
 func TestAppLoad_Success(tt *testing.T) {
 	tt.Parallel()
-	t := newTest(tt)
+	t := newTestApp(tt)
 
-	t.expectRootCheckSuccess()
+	t.ExpectRootCheckSuccess()
 	t.ExpectMounted()
-	t.expectLoadSuccess()
+	t.ExpectLoadSuccess()
 
 	t.Nil(t.App.Load())
 }
@@ -383,15 +383,15 @@ func TestAppLoad_Success(tt *testing.T) {
 
 func TestAppUnload_Do(tt *testing.T) {
 	tt.Parallel()
-	t := newTest(tt)
-	t.TestDo(t.expectUnloadSuccess, t.App.Unload)
+	t := newTestApp(tt)
+	t.TestDo(t.ExpectUnloadSuccess, t.App.Unload)
 }
 
 func TestAppUnload_WithoutBPF(tt *testing.T) {
 	tt.Parallel()
-	t := newTest(tt)
+	t := newTestApp(tt)
 
-	t.expectRootCheckSuccess()
+	t.ExpectRootCheckSuccess()
 	t.ExpectMounted()
 	t.ExpectCleanup(errMockRemove)
 
@@ -400,9 +400,9 @@ func TestAppUnload_WithoutBPF(tt *testing.T) {
 
 func TestAppUnload_WithBPF(tt *testing.T) {
 	tt.Parallel()
-	t := newTest(tt)
+	t := newTestApp(tt)
 
-	t.expectRootCheckSuccess()
+	t.ExpectRootCheckSuccess()
 	t.ExpectMounted()
 	t.ExpectCleanup(nil)
 
@@ -411,9 +411,9 @@ func TestAppUnload_WithBPF(tt *testing.T) {
 
 func TestAppUnload_CheckUnloadedBPFDirExists(tt *testing.T) {
 	tt.Parallel()
-	t := newTest(tt)
+	t := newTestApp(tt)
 
-	t.expectRootCheckSuccess()
+	t.ExpectRootCheckSuccess()
 	t.ExpectMounted()
 	for _, att := range main.CgroupAttach() {
 		t.ExpectCmdRun("bpftool", "cgroup", "detach",
@@ -431,9 +431,9 @@ func TestAppUnload_CheckUnloadedBPFDirExists(tt *testing.T) {
 
 func TestAppUnload_CheckUnloadedCgroupShowError(tt *testing.T) {
 	tt.Parallel()
-	t := newTest(tt)
+	t := newTestApp(tt)
 
-	t.expectRootCheckSuccess()
+	t.ExpectRootCheckSuccess()
 	t.ExpectMounted()
 	for _, att := range main.CgroupAttach() {
 		t.ExpectCmdRun("bpftool", "cgroup", "detach",
@@ -454,26 +454,26 @@ func TestAppUnload_CheckUnloadedCgroupShowError(tt *testing.T) {
 
 func TestAppSetMark_Do(tt *testing.T) {
 	tt.Parallel()
-	t := newTest(tt)
-	t.TestDo(t.expectSetMarkSuccess, func() error { return t.App.SetMark(main.Mark(0x10000000)) })
+	t := newTestApp(tt)
+	t.TestDo(t.ExpectSetMarkSuccess, func() error { return t.App.SetMark(main.Mark(0x10000000)) })
 }
 
 func TestAppSetMark_Success(tt *testing.T) {
 	tt.Parallel()
-	t := newTest(tt)
+	t := newTestApp(tt)
 
-	t.expectRootCheckSuccess()
+	t.ExpectRootCheckSuccess()
 	t.ExpectMounted()
-	t.expectSetMarkSuccess()
+	t.ExpectSetMarkSuccess()
 
 	t.Nil(t.App.SetMark(main.Mark(0x10000000)))
 }
 
 func TestAppSetMark_Error(tt *testing.T) {
 	tt.Parallel()
-	t := newTest(tt)
+	t := newTestApp(tt)
 
-	t.expectRootCheckSuccess()
+	t.ExpectRootCheckSuccess()
 	t.ExpectMounted()
 	t.ExpectCmdRun("bpftool", "map", "update",
 		"pinned", main.BPFDir+"/maps/same_cgroup_mark_cfg",
