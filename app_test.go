@@ -51,7 +51,6 @@ func newTestApp(tt *testing.T) *testApp {
 	t.Ctrl = gomock.NewController(t)
 	t.MockWorld = NewMockWorld(t.Ctrl)
 	t.Expect = t.MockWorld.EXPECT()
-	t.Expect.OsIsNotExist(gomock.Any()).DoAndReturn(os.IsNotExist).AnyTimes()
 	t.App = main.NewApp(t.MockWorld)
 
 	return t

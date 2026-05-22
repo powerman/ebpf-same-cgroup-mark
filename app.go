@@ -192,7 +192,7 @@ func (a *app) checkUnloaded() error {
 	var errs error
 
 	_, err := a.OsStat(BPFDir)
-	if !a.OsIsNotExist(err) {
+	if !errors.Is(err, fs.ErrNotExist) {
 		errs = errors.Join(errs, fmt.Errorf("%w: %s", errBPFDirExists, BPFDir))
 	}
 
