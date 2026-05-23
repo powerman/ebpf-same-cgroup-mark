@@ -6,7 +6,7 @@ TABLE=same_cgroup_mark_test
 CGROUP_ROOT=/sys/fs/cgroup/ebpf-same-cgroup-mark-test
 OTHER_CGROUP="$CGROUP_ROOT/other"
 
-MARK=0x40000000
+MARK=0x80000000
 PORT_SAME=18080
 PORT_OTHER=18081
 
