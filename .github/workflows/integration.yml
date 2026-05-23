@@ -35,7 +35,8 @@ jobs:
           # linux-tools-* packages on Ubuntu 24.04 (known packaging bug).
           # Build a working bpftool from the libbpf mirror repo.
           if ! sudo bpftool --version &>/dev/null; then
-            git clone --depth 1 https://github.com/libbpf/bpftool.git /tmp/bpftool
+            git clone --depth 1 --recurse-submodules \
+              https://github.com/libbpf/bpftool.git /tmp/bpftool
             make -C /tmp/bpftool/src -j"$(nproc)"
             sudo install -m 755 /tmp/bpftool/src/bpftool /usr/local/bin/
             rm -rf /tmp/bpftool
