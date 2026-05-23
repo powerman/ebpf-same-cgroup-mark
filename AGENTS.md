@@ -120,14 +120,6 @@ NOTE: The above example does not mean you should break into very short lines as 
   so tests can mock all system calls.
 - The production implementation wraps real OS calls directly.
 
-#### Golang Style
-
-- Avoid the `if err := expr; err != nil { ... }` pattern.
-  Assign in a separate statement, then check: `err := expr` / `if err != nil { ... }`.
-  The short form `if err := expr; err != nil` is acceptable only
-  when a new scope is genuinely needed
-  (e.g., to limit the variable's scope deliberately).
-
 ### Golang Testing
 
 - Tests must only test the project's own code, not stdlib or third-party libraries.
