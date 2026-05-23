@@ -67,7 +67,6 @@ nft add rule inet "$TABLE" output \
 
 # Load BPF program.
 info "loading BPF program"
-mise run build
 "$BINARY" load -m "$MARK"
 
 # Positive test: same cgroup connection gets marked.

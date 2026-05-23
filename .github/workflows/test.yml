@@ -41,6 +41,9 @@ jobs:
         with:
           total_cmd: "mise run -q cover:go:total | tail -n 1 | sed -e 's/.*)//'"
 
+      - name: Build
+        run: mise run build
+
       - name: Integration test
         run: timeout 30 sudo -E "$(which mise)" exec -- bash .github/integration_test.sh
 
@@ -66,6 +69,9 @@ jobs:
       - run: git reset --hard # Work around https://github.com/jdx/mise/discussions/8270.
 
       - run: mise run test
+
+      - name: Build
+        run: mise run build
 
       - name: Integration test
         run: timeout 30 sudo -E "$(which mise)" exec -- bash .github/integration_test.sh
