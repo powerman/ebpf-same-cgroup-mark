@@ -22,155 +22,37 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Cache bpftool
+        uses: actions/cache@v4
+        with:
+          path: .cache/bpftool-bin
+          key: bpftool-${{ runner.arch }}
+
       - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            linux-tools-common linux-tools-azure \
-            clang llvm libbpf-dev netcat-openbsd nftables socat
-          # The bpftool wrapper from linux-tools-common dispatches to
-          # /usr/lib/linux-tools/$(uname -r)/bpftool, which does not exist
-          # because the running kernel version differs from the installed
-          # linux-tools-azure package, AND because bpftool is missing from
-          # linux-tools-* packages on Ubuntu 24.04 (known packaging bug).
-          # Build a working bpftool from the libbpf mirror repo.
-          if ! sudo bpftool --version &>/dev/null; then
+            clang llvm libbpf-dev nftables socat
+          if test -f .cache/bpftool-bin/bpftool; then
+            sudo install -m 755 .cache/bpftool-bin/bpftool /usr/local/bin/
+          elif ! bpftool --version &>/dev/null; then
             git clone --depth 1 --recurse-submodules \
               https://github.com/libbpf/bpftool.git /tmp/bpftool
             make -C /tmp/bpftool/src -j"$(nproc)"
+            mkdir -p .cache/bpftool-bin
+            cp /tmp/bpftool/src/bpftool .cache/bpftool-bin/
             sudo install -m 755 /tmp/bpftool/src/bpftool /usr/local/bin/
             rm -rf /tmp/bpftool
-            sudo bpftool --version
           fi
+          bpftool --version
 
       - uses: jdx/mise-action@v4
-      - run: git reset --hard # Work around https://github.com/jdx/mise/discussions/8270.
+      - run: git reset --hard
 
       - uses: powerman/.github/.github/actions/cache-go-and-tools@main
 
       - name: Build
         run: mise run build
 
-      - name: Run shell-only integration test
-        env:
-          MARK: '0x40000000'
-          PORT_SAME: '18080'
-          PORT_OTHER: '18081'
-          CGROUP_ROOT: /sys/fs/cgroup/ebpf-same-cgroup-mark-test
-        run: |
-          set -euo pipefail
-
-          BINARY=.cache/ebpf-same-cgroup-mark
-          TABLE=same_cgroup_mark_test
-          CHAIN=output
-          SAME_CGROUP="$CGROUP_ROOT/same"
-          OTHER_CGROUP="$CGROUP_ROOT/other"
-
-          start_listener() {
-            local port="$1"
-            sudo timeout 10 socat TCP-LISTEN:"$port",bind=127.0.0.1,reuseaddr OPEN:/dev/null,trunc &
-            LISTENER_PID=$!
-          }
-
-          wait_listener() {
-            local port="$1"
-            for _ in $(seq 50); do
-              if sudo ss -ltn "sport = :$port" | grep -q LISTEN; then
-                return 0
-              fi
-              sleep 0.1
-            done
-            return 1
-          }
-
-          # connect to listener from the same cgroup (no explicit cgroup move).
-          run_client_same() {
-            local port="$1"
-            printf 'ping\n' | sudo timeout 10 socat - TCP:127.0.0.1:"$port",connect-timeout=5 >/dev/null
-          }
-
-          # connect to listener from a different cgroup.
-          run_client_other() {
-            local port="$1"
-            sudo bash -c "echo \$\$ > '$OTHER_CGROUP/cgroup.procs'; printf 'ping\n' | timeout 10 socat - TCP:127.0.0.1:'$port',connect-timeout=5 >/dev/null"
-          }
-
-          rule_packets() {
-            local port="$1"
-            sudo nft list chain inet "$TABLE" "$CHAIN" | grep "dport $port" | sed -E 's/.*counter packets ([0-9]+).*/\1/'
-          }
-
-          cleanup() {
-            sudo "$BINARY" unload || true
-            sudo nft delete table inet "$TABLE" || true
-            sudo rmdir "$SAME_CGROUP" "$OTHER_CGROUP" "$CGROUP_ROOT" || true
-          }
-
-          cleanup
-          sudo mkdir -p "$SAME_CGROUP" "$OTHER_CGROUP"
-          echo "PROGRESS: cgroups created"
-
-          # Sanity check: basic networking works before loading BPF.
-          timeout 5 socat TCP-LISTEN:18082,bind=127.0.0.1,reuseaddr OPEN:/dev/null,trunc &
-          PRE_CHECK_PID=$!
-          sleep 0.5
-          printf 'x\n' | timeout 3 socat - TCP:127.0.0.1:18082,connect-timeout=3 >/dev/null 2>&1
-          PRE_CHECK_RC=$?
-          wait "$PRE_CHECK_PID" 2>/dev/null || true
-          echo "PROGRESS: pre-check rc=$PRE_CHECK_RC"
-          if [ "$PRE_CHECK_RC" -ne 0 ]; then
-            echo "FATAL: basic networking broken before BPF load" >&2
-            exit 1
-          fi
-
-          sudo nft -f - <<EOF
-          table inet $TABLE {
-            chain $CHAIN {
-              type filter hook output priority 0; policy accept;
-              tcp dport $PORT_SAME meta mark & $MARK == $MARK counter log prefix "same-cgroup-positive "
-              tcp dport $PORT_OTHER meta mark & $MARK == $MARK counter log prefix "same-cgroup-negative "
-            }
-          }
-          EOF
-
-          sudo dmesg -C || true
-          sudo "$BINARY" load -m "$MARK"
-          echo "PROGRESS: BPF loaded"
-
-          echo "PROGRESS: starting positive test"
-          start_listener "$PORT_SAME"
-          wait_listener "$PORT_SAME"
-          echo "PROGRESS: listener ready, running client"
-          run_client_same "$PORT_SAME"
-          wait "$LISTENER_PID"
-          echo "PROGRESS: positive test client done"
-
-          POSITIVE_PACKETS="$(rule_packets "$PORT_SAME")"
-          sudo dmesg | tee positive.log
-          echo "PROGRESS: positive packets=$POSITIVE_PACKETS"
-          test "${POSITIVE_PACKETS:-0}" -gt 0
-          grep -q 'same-cgroup-positive' positive.log
-          echo "PROGRESS: positive test passed"
-
-          sudo dmesg -C || true
-
-          echo "PROGRESS: starting negative test"
-          start_listener "$PORT_OTHER"
-          wait_listener "$PORT_OTHER"
-          echo "PROGRESS: listener ready, running client"
-          run_client_other "$PORT_OTHER"
-          wait "$LISTENER_PID"
-          echo "PROGRESS: negative test client done"
-
-          NEGATIVE_PACKETS="$(rule_packets "$PORT_OTHER")"
-          sudo dmesg | tee negative.log
-          echo "PROGRESS: negative packets=$NEGATIVE_PACKETS"
-          test "${NEGATIVE_PACKETS:-0}" -eq 0
-          if grep -q 'same-cgroup-negative' negative.log; then
-            echo 'unexpected mark on cross-cgroup connection' >&2
-            exit 1
-          fi
-          echo "PROGRESS: negative test passed"
-
-          cleanup
-          echo "PROGRESS: all done"
+      - name: Integration test
+        run: sudo -E bash .github/workflows/integration.sh
