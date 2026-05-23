@@ -14,7 +14,8 @@ when the destination listener socket lives in the same cgroup.
 
 ## Requirements
 
-- Linux kernel with BPF support (CONFIG_BPF, CONFIG_BPF_SYSCALL).
+- Linux kernel with BPF and cgroup BPF support
+  (`CONFIG_BPF`, `CONFIG_BPF_SYSCALL`, `CONFIG_CGROUP_BPF`).
 
 ## Installation
 
@@ -58,24 +59,43 @@ Detach and unload:
 sudo ebpf-same-cgroup-mark unload
 ```
 
+Only listeners started after loading BPF will be handled,
+so either restart local servers after loading BPF or reboot.
+
+Ensure `ebpf-same-cgroup-mark load` is executed on system boot
+before starting local servers.
+
+> [!NOTE]
+>
+> It will mount `/sys/fs/bpf` if it's not mounted.
+
 ### Example nftables integration
 
 ```nft
 define same_cgroup_mark = 0x40000000
 
-socket mark & $same_cgroup_mark == $same_cgroup_mark accept
+table … {
+    chain … {
+        type filter hook output priority filter; policy reject;
+
+        # Accept connections from local clients to local servers when both in the same cgroup.
+        socket mark & $same_cgroup_mark == $same_cgroup_mark accept
+    }
+}
 ```
 
 Use the same bit value both in nftables and in the mark config.
 
 ## How it works
 
+The CLI tool on Go is just a [BPF](bpf/same-cgroup-mark.c) loader.
+
 The implementation uses four cgroup BPF hooks attached at `/sys/fs/cgroup`:
 
-- `cgroup/bind4`
-- `cgroup/bind6`
-- `cgroup/connect4`
-- `cgroup/connect6`
+- `cgroup_inet4_bind`
+- `cgroup_inet6_bind`
+- `cgroup_inet4_connect`
+- `cgroup_inet6_connect`
 
 The bind hooks store the creator cgroup ID in socket-local storage
 for TCP listener sockets.
@@ -83,7 +103,7 @@ The connect hooks look up the destination listener,
 compare its stored cgroup ID against the current task's cgroup,
 and OR a configurable mark bit into `SO_MARK` when they match.
 
-Because `bpf_sk_lookup_tcp()` only searches the local socket table in the
-current network namespace,
-this mechanism affects only local listeners on the same machine.
+Because `bpf_sk_lookup_tcp()` only searches the local socket table
+in the current network namespace,
+this mechanism affects only local clients and listeners on the same machine.
 It does not mark ordinary remote TCP connections to external hosts.
