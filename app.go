@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bytes"
 	_ "embed"
 	"encoding/json"
 	"errors"
@@ -266,7 +267,9 @@ func (a *app) bpftoolCgroupShow() ([]CgroupAttachEntry, error) {
 		}
 		return nil, err
 	}
-	if len(out) == 0 {
+	// bpftool from libbpf has a bug: it outputs just "[" (no
+	// closing bracket) when no cgroup programs are attached.
+	if len(out) == 0 || string(bytes.TrimSpace(out)) == "[" {
 		return nil, nil
 	}
 	var attaches []CgroupAttachEntry
