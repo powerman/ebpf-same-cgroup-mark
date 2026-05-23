@@ -43,8 +43,6 @@ rule_packets() {
         sed -E 's/.*counter packets ([0-9]+).*/\1/'
 }
 
-trap dmesg EXIT
-
 # Setup cgroup hierarchy.
 info "setting up cgroup hierarchy"
 mkdir -p "$CGROUP_ROOT/same" "$OTHER_CGROUP"
@@ -69,6 +67,7 @@ nft add rule inet "$TABLE" output \
 
 # Load BPF program.
 info "loading BPF program"
+mise run build
 "$BINARY" load -m "$MARK"
 
 # Positive test: same cgroup connection gets marked.

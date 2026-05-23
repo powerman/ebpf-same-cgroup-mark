@@ -27,7 +27,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            clang llvm libbpf-dev
+            clang llvm libbpf-dev nftables socat
 
       - uses: jdx/mise-action@v4
       - run: git reset --hard # Work around https://github.com/jdx/mise/discussions/8270.
@@ -41,22 +41,8 @@ jobs:
         with:
           total_cmd: "mise run -q cover:go:total | tail -n 1 | sed -e 's/.*)//'"
 
-      - name: Install integration test dependencies
-        run: sudo apt-get install -y --no-install-recommends nftables socat
-
-      - name: Build
-        run: mise run build
-
-      - name: Clear kernel ring buffer
-        if: always()
-        run: sudo dmesg --clear
-
       - name: Integration test
         run: timeout 30 sudo -E "$(which mise)" exec -- bash .github/integration_test.sh
-
-      - name: Show relevant kernel messages
-        if: always()
-        run: sudo dmesg
 
   # Testing on available native platforms.
   native:
@@ -74,29 +60,15 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            clang llvm libbpf-dev
+            clang llvm libbpf-dev nftables socat
 
       - uses: jdx/mise-action@v4
       - run: git reset --hard # Work around https://github.com/jdx/mise/discussions/8270.
 
       - run: mise run test
 
-      - name: Install integration test dependencies
-        run: sudo apt-get install -y --no-install-recommends nftables socat
-
-      - name: Build
-        run: mise run build
-
-      - name: Clear kernel ring buffer
-        if: always()
-        run: sudo dmesg --clear
-
       - name: Integration test
         run: timeout 30 sudo -E "$(which mise)" exec -- bash .github/integration_test.sh
-
-      - name: Show relevant kernel messages
-        if: always()
-        run: sudo dmesg | grep -aiE 'mark|same_cgroup' | tail -20 || true
 
   # Aggregate job for branch protection.
   test:
