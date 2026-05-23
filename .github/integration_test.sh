@@ -44,7 +44,7 @@ rule_packets() {
 }
 
 info "PATH=$PATH"
-info "which bpftool: $(which -a bpftool)"
+info "ls bpftool: $(ls -l $(which -a bpftool))"
 
 # Setup cgroup hierarchy.
 info "setting up cgroup hierarchy"
