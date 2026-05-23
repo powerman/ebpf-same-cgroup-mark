@@ -227,9 +227,13 @@ func (a *app) mountBPF() ([]byte, error) {
 }
 
 func (a *app) bpftoolLoadAll(bpfObjPath string) error {
-	return a.ExecCommand("bpftool", "prog", "loadall",
+	out, err := a.ExecCommand("bpftool", "prog", "loadall",
 		bpfObjPath, BPFDir, "pinmaps", BPFDir+"/maps",
-	).Run()
+	).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("bpftool loadall: %w\n%s", err, out)
+	}
+	return nil
 }
 
 func (a *app) bpftoolAttach(attachType, progPin string) error {

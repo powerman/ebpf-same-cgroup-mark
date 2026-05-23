@@ -122,9 +122,9 @@ func (t *testApp) ExpectEnsureBPFFSMount() {
 func (t *testApp) ExpectLoadSuccess() {
 	t.ExpectCleanup(errMockRemove)
 	t.ExpectTempFile()
-	t.ExpectCmdRun("bpftool", "prog", "loadall",
+	t.ExpectCmdOutput("bpftool", "prog", "loadall",
 		gomock.Any(), main.BPFDir, "pinmaps", main.BPFDir+"/maps",
-	).Return(nil)
+	).Return(nil, nil)
 	for _, att := range main.CgroupAttach() {
 		t.ExpectCmdRun("bpftool", "cgroup", "attach",
 			main.CgroupRoot, att.AttachType, "pinned", filepath.Join(main.BPFDir, att.ProgName),
@@ -343,9 +343,9 @@ func TestAppLoad_BPFToolLoadallError(tt *testing.T) {
 	t.ExpectMounted()
 	t.ExpectCleanup(errMockRemove)
 	t.ExpectTempFile()
-	t.ExpectCmdRun("bpftool", "prog", "loadall",
+	t.ExpectCmdOutput("bpftool", "prog", "loadall",
 		gomock.Any(), main.BPFDir, "pinmaps", main.BPFDir+"/maps",
-	).Return(errMockLoadall)
+	).Return(nil, errMockLoadall)
 	t.ExpectCleanup(errMockRemove)
 
 	err := t.App.Load()
@@ -360,9 +360,9 @@ func TestAppLoad_AttachError(tt *testing.T) {
 	t.ExpectMounted()
 	t.ExpectCleanup(errMockRemove)
 	t.ExpectTempFile()
-	t.ExpectCmdRun("bpftool", "prog", "loadall",
+	t.ExpectCmdOutput("bpftool", "prog", "loadall",
 		gomock.Any(), main.BPFDir, "pinmaps", main.BPFDir+"/maps",
-	).Return(nil)
+	).Return(nil, nil)
 	entries := main.CgroupAttach()
 	for _, att := range entries[:len(entries)-1] {
 		t.ExpectCmdRun("bpftool", "cgroup", "attach",

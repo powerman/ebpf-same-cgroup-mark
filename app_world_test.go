@@ -162,12 +162,12 @@ func (t *statefulAppTest) installWorld() {
 	t.World.EXPECT().ExecCommand(
 		"bpftool", "prog", "loadall", gomock.Any(), main.BPFDir, "pinmaps", main.BPFDir+"/maps",
 	).AnyTimes().DoAndReturn(func(string, ...string) main.WorldExecCmd {
-		return t.newRunCmd(func() error {
+		return t.newCombinedOutputCmd(func() ([]byte, error) {
 			if t.state.loadallErr != nil {
-				return t.state.loadallErr
+				return nil, t.state.loadallErr
 			}
 			t.state.bpfDirExists = true
-			return nil
+			return nil, nil
 		})
 	})
 	t.World.EXPECT().ExecCommand(
