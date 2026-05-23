@@ -1,9 +1,9 @@
-//go:generate mise exec -- sh -c "mockgen -package=\"${DOLLAR}1_test\" -source=\"${DOLLAR}2\" -destination=\"mock.$(basename \"${DOLLAR}2\" .go)_test.go\"" _ $GOPACKAGE $GOFILE
+//go:generate mise exec -- sh -c "mockgen -package=\"${DOLLAR}1\" -source=\"${DOLLAR}2\" -destination=\"../test/internal/mock.$(basename \"${DOLLAR}2\" .go)_test.go\"" _ $GOPACKAGE $GOFILE
 
-package main
+// Package internal provides the eBPF program loader and CLI commands.
+package internal
 
 import (
-	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,11 +11,6 @@ import (
 	"path/filepath"
 	"slices"
 )
-
-// BPFObj is the embedded eBPF object file compiled from same-cgroup-mark.bpf.c.
-//
-//go:embed .cache/same-cgroup-mark.bpf.o
-var BPFObj []byte
 
 // Constants.
 const (
@@ -57,11 +52,13 @@ type App interface {
 
 type app struct {
 	World
+
+	bpfObj []byte
 }
 
 // NewApp creates a new App with the given World.
-func NewApp(world World) *app {
-	return &app{World: world}
+func NewApp(world World, bpfObj []byte) *app { //nolint:revive // Used for mock vs real dependency injection.
+	return &app{World: world, bpfObj: bpfObj}
 }
 
 // Load loads and attaches the eBPF program.
@@ -175,7 +172,7 @@ func (a *app) writeTempBPFObj() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("create temp file: %w", err)
 	}
-	_, err = f.Write(BPFObj)
+	_, err = f.Write(a.bpfObj)
 	if err != nil {
 		_ = f.Close()
 		_ = a.OsRemove(f.Name())

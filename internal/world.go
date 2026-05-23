@@ -1,7 +1,7 @@
-//go:generate mise exec -- sh -c "mockgen -package=\"${DOLLAR}1_test\" -source=\"${DOLLAR}2\" -destination=\"mock.$(basename \"${DOLLAR}2\" .go)_test.go\"" _ $GOPACKAGE $GOFILE
+//go:generate mise exec -- sh -c "mockgen -package=\"${DOLLAR}1\" -source=\"${DOLLAR}2\" -destination=\"../test/internal/mock.$(basename \"${DOLLAR}2\" .go)_test.go\"" _ $GOPACKAGE $GOFILE
 
-//nolint:godoclint // Thin wrappers over standard library functions.
-package main
+//nolint:godoclint,revive // Thin wrappers over standard library functions.
+package internal
 
 import (
 	"os"

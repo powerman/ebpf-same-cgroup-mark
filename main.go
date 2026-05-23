@@ -1,20 +1,25 @@
 // Load/unload eBPF program that sets SO_MARK on same-cgroup TCP connections.
 package main
 
-import "github.com/alecthomas/kong"
+import (
+	_ "embed"
 
-// CLI defines the command-line interface for the program.
-type CLI struct {
-	Load   LoadCmd   `cmd:"" help:"Load and attach the eBPF program."`
-	Unload UnloadCmd `cmd:"" help:"Detach and unload the eBPF program."`
-}
+	"github.com/alecthomas/kong"
+
+	"github.com/powerman/ebpf-same-cgroup-mark/internal"
+)
+
+// BPFObj is the embedded eBPF object file compiled from same-cgroup-mark.bpf.c.
+//
+//go:embed .cache/same-cgroup-mark.bpf.o
+var BPFObj []byte
 
 func main() {
-	var cli CLI
+	var cli internal.CLI
 	ctx := kong.Parse(&cli,
 		kong.Description("Set SO_MARK on TCP sockets in the same cgroup."),
 		kong.ShortUsageOnError(),
 	)
-	ctx.BindTo(NewApp(RealWorld{}), (*App)(nil))
+	ctx.BindTo(internal.NewApp(internal.RealWorld{}, BPFObj), (*internal.App)(nil))
 	ctx.FatalIfErrorf(ctx.Run())
 }

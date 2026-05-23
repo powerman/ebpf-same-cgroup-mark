@@ -112,6 +112,7 @@ run = 'go build -trimpath -ldflags="-s -w -buildid=" -o .cache/ebpf-same-cgroup-
 [tasks.'test:go']
 description = 'Run Go tests for a whole project'
 depends = ['build:bpf']
+dir = 'test'
 wait_for = ['generate:*', 'lint:*']              # Avoid interleaved output with linters.
 run = 'gotestsum -- -race -timeout=60s ./...'
 
@@ -127,15 +128,16 @@ run = 'go tool cover -html={{vars.cover}}'
 
 [tasks.'cover:go:generate']
 hide = true
-depends = 'cachedir'
+depends = ['cachedir', 'build:bpf']
+dir = 'test'
 sources = ['**/*.go']
-outputs = ['{{vars.cover}}']
+outputs = ['../{{vars.cover}}']
 run = '''
 gotestsum -- \
-    -coverpkg="$(go list ./... | paste -s -d,)" \
-    -coverprofile {{vars.cover}} \
+    -coverpkg="$(cd .. && go list ./... | paste -s -d,)" \
+    -coverprofile ../{{vars.cover}} \
     ./...
-go tool cover -html={{vars.cover}} -o {{vars.cover}}.html
+go tool cover -html=../{{vars.cover}} -o ../{{vars.cover}}.html
 '''
 
 [tasks.cachedir]

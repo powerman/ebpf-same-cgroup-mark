@@ -1,4 +1,4 @@
-package main_test
+package internal
 
 import (
 	"errors"
@@ -9,7 +9,7 @@ import (
 	"github.com/powerman/check"
 	"go.uber.org/mock/gomock"
 
-	main "github.com/powerman/ebpf-same-cgroup-mark"
+	"github.com/powerman/ebpf-same-cgroup-mark/internal"
 )
 
 var (
@@ -18,7 +18,7 @@ var (
 )
 
 // kongParse parses command-line arguments using Kong for testing.
-func kongParse(t *check.C, args ...string) (ctx *kong.Context, cli main.CLI, err error) {
+func kongParse(t *check.C, args ...string) (ctx *kong.Context, cli internal.CLI, err error) {
 	t.Helper()
 	k, err := kong.New(&cli,
 		kong.Writers(io.Discard, io.Discard),
@@ -32,11 +32,11 @@ func kongParse(t *check.C, args ...string) (ctx *kong.Context, cli main.CLI, err
 }
 
 // kongRun parses command-line arguments using Kong, binds the App, and runs the command.
-func kongRun(t *check.C, a main.App, args ...string) error {
+func kongRun(t *check.C, a internal.App, args ...string) error {
 	t.Helper()
 	ctx, _, err := kongParse(t, args...)
 	t.Nil(err)
-	ctx.BindTo(a, (*main.App)(nil))
+	ctx.BindTo(a, (*internal.App)(nil))
 	return ctx.Run()
 }
 
@@ -56,7 +56,7 @@ func TestLoadCmd_Mark(t *testing.T) {
 		t := check.T(tt).MustAll()
 		_, cli, err := kongParse(t, "load", "--mark", "0x20000000")
 		t.Nil(err)
-		t.DeepEqual(cli.Load.Mark, new(main.Mark(0x20000000)))
+		t.DeepEqual(cli.Load.Mark, new(internal.Mark(0x20000000)))
 	})
 
 	t.Run("Invalid", func(tt *testing.T) {
@@ -89,7 +89,7 @@ func TestCmd(t *testing.T) {
 			args: []string{"load", "--mark", "0x10000000"},
 			expect: func(a *MockApp) {
 				a.EXPECT().Load().Return(nil)
-				a.EXPECT().SetMark(main.Mark(0x10000000)).Return(errMockApp)
+				a.EXPECT().SetMark(internal.Mark(0x10000000)).Return(errMockApp)
 				a.EXPECT().Unload().Return(nil)
 			},
 			wantErrs: []error{errMockApp},
@@ -99,7 +99,7 @@ func TestCmd(t *testing.T) {
 			args: []string{"load", "--mark", "0x10000000"},
 			expect: func(a *MockApp) {
 				a.EXPECT().Load().Return(nil)
-				a.EXPECT().SetMark(main.Mark(0x10000000)).Return(errMockApp)
+				a.EXPECT().SetMark(internal.Mark(0x10000000)).Return(errMockApp)
 				a.EXPECT().Unload().Return(errMockRollback)
 			},
 			wantErrs: []error{errMockApp, errMockRollback},
@@ -116,7 +116,7 @@ func TestCmd(t *testing.T) {
 			args: []string{"load", "--mark", "0x10000000"},
 			expect: func(a *MockApp) {
 				a.EXPECT().Load().Return(nil)
-				a.EXPECT().SetMark(main.Mark(0x10000000)).Return(nil)
+				a.EXPECT().SetMark(internal.Mark(0x10000000)).Return(nil)
 			},
 		},
 		{

@@ -1,4 +1,4 @@
-package main_test
+package internal
 
 import (
 	"errors"
@@ -9,7 +9,7 @@ import (
 	"github.com/powerman/check"
 	"go.uber.org/mock/gomock"
 
-	main "github.com/powerman/ebpf-same-cgroup-mark"
+	"github.com/powerman/ebpf-same-cgroup-mark/internal"
 )
 
 // Package-level sentinel errors for mocks (err113 requires static errors).
@@ -30,7 +30,7 @@ type testApp struct {
 	Ctrl      *gomock.Controller
 	MockWorld *MockWorld
 	Expect    *MockWorldMockRecorder
-	App       main.App
+	App       internal.App
 }
 
 func newTestApp(tt *testing.T) *testApp {
@@ -40,7 +40,7 @@ func newTestApp(tt *testing.T) *testApp {
 	t.Ctrl = gomock.NewController(t)
 	t.MockWorld = NewMockWorld(t.Ctrl)
 	t.Expect = t.MockWorld.EXPECT()
-	t.App = main.NewApp(t.MockWorld)
+	t.App = internal.NewApp(t.MockWorld, testBPFObj)
 
 	return t
 }
@@ -54,24 +54,24 @@ func (t *testApp) ExpectRootCheckSuccess() {
 }
 
 func (t *testApp) ExpectEnsureBPFFSMounted() {
-	t.ExpectCmd("mountpoint", "-q", main.BPFRoot).Run(nil)
+	t.ExpectCmd("mountpoint", "-q", internal.BPFRoot).Run(nil)
 }
 
 func (t *testApp) ExpectEnsureBPFFSMkdirError() {
-	t.ExpectCmd("mountpoint", "-q", main.BPFRoot).Run(errMockNotMounted)
-	t.Expect.OsMkdirAll(main.BPFRoot, main.BPFMode).Return(errMockMkdir)
+	t.ExpectCmd("mountpoint", "-q", internal.BPFRoot).Run(errMockNotMounted)
+	t.Expect.OsMkdirAll(internal.BPFRoot, internal.BPFMode).Return(errMockMkdir)
 }
 
 func (t *testApp) ExpectEnsureBPFFSMountError() {
-	t.ExpectCmd("mountpoint", "-q", main.BPFRoot).Run(errMockNotMounted)
-	t.Expect.OsMkdirAll(main.BPFRoot, main.BPFMode).Return(nil)
-	t.ExpectCmd("mount", "-t", "bpf", "bpf", main.BPFRoot).CombinedOutput([]byte("mount failure details"), errMockMountFailed)
+	t.ExpectCmd("mountpoint", "-q", internal.BPFRoot).Run(errMockNotMounted)
+	t.Expect.OsMkdirAll(internal.BPFRoot, internal.BPFMode).Return(nil)
+	t.ExpectCmd("mount", "-t", "bpf", "bpf", internal.BPFRoot).CombinedOutput([]byte("mount failure details"), errMockMountFailed)
 }
 
 func (t *testApp) ExpectEnsureBPFFSMount() {
-	t.ExpectCmd("mountpoint", "-q", main.BPFRoot).Run(errMockNotMounted)
-	t.Expect.OsMkdirAll(main.BPFRoot, main.BPFMode).Return(nil)
-	t.ExpectCmd("mount", "-t", "bpf", "bpf", main.BPFRoot).CombinedOutput(nil, nil)
+	t.ExpectCmd("mountpoint", "-q", internal.BPFRoot).Run(errMockNotMounted)
+	t.Expect.OsMkdirAll(internal.BPFRoot, internal.BPFMode).Return(nil)
+	t.ExpectCmd("mount", "-t", "bpf", "bpf", internal.BPFRoot).CombinedOutput(nil, nil)
 }
 
 // ExpectLoadSuccess sets up successful Load-specific expectations (cleanup, temp file, loadall, attach).
@@ -79,11 +79,11 @@ func (t *testApp) ExpectLoadSuccess() {
 	t.ExpectCleanup(errMockRemove)
 	t.ExpectTempFile()
 	t.ExpectCmd("bpftool", "prog", "loadall",
-		gomock.Any(), main.BPFDir, "pinmaps", main.BPFDir+"/maps",
+		gomock.Any(), internal.BPFDir, "pinmaps", internal.BPFDir+"/maps",
 	).Run(nil)
-	for _, att := range main.CgroupAttaches() {
+	for _, att := range internal.CgroupAttaches() {
 		t.ExpectCmd("bpftool", "cgroup", "attach",
-			main.CgroupRoot, att.AttachType, "pinned", filepath.Join(main.BPFDir, att.Name),
+			internal.CgroupRoot, att.AttachType, "pinned", filepath.Join(internal.BPFDir, att.Name),
 		).Run(nil)
 	}
 }
@@ -96,7 +96,7 @@ func (t *testApp) ExpectUnloadSuccess() {
 // ExpectSetMarkSuccess sets up successful SetMark-specific expectations (bpftool map update).
 func (t *testApp) ExpectSetMarkSuccess() {
 	t.ExpectCmd("bpftool", "map", "update",
-		"pinned", main.BPFDir+"/maps/same_cgroup_mark_cfg",
+		"pinned", internal.BPFDir+"/maps/same_cgroup_mark_cfg",
 		"key", "hex", "00", "00", "00", "00",
 		"value", "hex", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
 	).Run(nil)
@@ -132,7 +132,7 @@ func (e *mockExecCmd) CombinedOutput(out []byte, err error) {
 func (t *testApp) ExpectTempFile() {
 	tf := NewMockWorldOsFile(t.Ctrl)
 	t.Expect.OsCreateTemp("", "same-cgroup-mark.*.bpf.o").Return(tf, nil)
-	tf.EXPECT().Write(main.BPFObj).Return(len(main.BPFObj), nil)
+	tf.EXPECT().Write(testBPFObj).Return(len(testBPFObj), nil)
 	tf.EXPECT().Close().Return(nil)
 	tf.EXPECT().Name().Return("/tmp/test.bpf.o")
 	t.Expect.OsRemove("/tmp/test.bpf.o").Return(nil)
@@ -140,21 +140,21 @@ func (t *testApp) ExpectTempFile() {
 
 // ExpectMounted sets up successful ensureBPFFS (already mounted).
 func (t *testApp) ExpectMounted() {
-	t.ExpectCmd("mountpoint", "-q", main.BPFRoot).Run(nil)
+	t.ExpectCmd("mountpoint", "-q", internal.BPFRoot).Run(nil)
 }
 
 // ExpectCleanup sets up the private unload cleanup expectations.
 // detachErr controls whether detach returns error (clean state) or nil (BPF state present).
 // Does NOT include prepare/rootcheck — use when calling private unload directly.
 func (t *testApp) ExpectCleanup(detachErr error) {
-	for _, att := range main.CgroupAttaches() {
+	for _, att := range internal.CgroupAttaches() {
 		t.ExpectCmd("bpftool", "cgroup", "detach",
-			main.CgroupRoot, att.AttachType, "pinned", filepath.Join(main.BPFDir, att.Name),
+			internal.CgroupRoot, att.AttachType, "pinned", filepath.Join(internal.BPFDir, att.Name),
 		).Run(detachErr)
 	}
-	t.Expect.OsRemoveAll(main.BPFDir).Return(nil)
-	t.Expect.OsStat(main.BPFDir).Return(nil, os.ErrNotExist)
-	t.ExpectCmd("bpftool", "--json", "cgroup", "show", main.CgroupRoot).Output([]byte("[]"), nil)
+	t.Expect.OsRemoveAll(internal.BPFDir).Return(nil)
+	t.Expect.OsStat(internal.BPFDir).Return(nil, os.ErrNotExist)
+	t.ExpectCmd("bpftool", "--json", "cgroup", "show", internal.CgroupRoot).Output([]byte("[]"), nil)
 }
 
 // ExpectTempFileError sets up expectations for a temp file operation
@@ -170,7 +170,7 @@ func (t *testApp) ExpectTempFileError(createErr, writeErr, closeErr error) {
 	}
 	tf := NewMockWorldOsFile(t.Ctrl)
 	t.Expect.OsCreateTemp("", "same-cgroup-mark.*.bpf.o").Return(tf, nil)
-	writeResult := len(main.BPFObj)
+	writeResult := len(testBPFObj)
 	if writeErr != nil {
 		writeResult = 0
 	}
@@ -190,7 +190,7 @@ func (t *testApp) TestDo(setup func(), method func() error) {
 	t.Helper()
 
 	t.ExpectRootCheckError()
-	t.Err(method(), main.ErrMustBeRoot)
+	t.Err(method(), internal.ErrMustBeRoot)
 
 	t.ExpectRootCheckSuccess()
 	t.ExpectEnsureBPFFSMkdirError()
@@ -267,16 +267,16 @@ func TestAppLoad_CleanupPreviousStateError(tt *testing.T) {
 
 	t.ExpectRootCheckSuccess()
 	t.ExpectMounted()
-	for _, att := range main.CgroupAttaches() {
+	for _, att := range internal.CgroupAttaches() {
 		t.ExpectCmd("bpftool", "cgroup", "detach",
-			main.CgroupRoot, att.AttachType, "pinned", filepath.Join(main.BPFDir, att.Name),
+			internal.CgroupRoot, att.AttachType, "pinned", filepath.Join(internal.BPFDir, att.Name),
 		).Run(nil)
 	}
-	t.Expect.OsRemoveAll(main.BPFDir).Return(nil)
+	t.Expect.OsRemoveAll(internal.BPFDir).Return(nil)
 	// checkUnloaded: program still attached (cgroup show still mentions it).
-	t.Expect.OsStat(main.BPFDir).Return(nil, os.ErrNotExist)
+	t.Expect.OsStat(internal.BPFDir).Return(nil, os.ErrNotExist)
 	attaches := []byte(`[{"name":"same_cgroup_bind4","attach_type":"cgroup_inet4_bind"}]`)
-	t.ExpectCmd("bpftool", "--json", "cgroup", "show", main.CgroupRoot).Output(attaches, nil)
+	t.ExpectCmd("bpftool", "--json", "cgroup", "show", internal.CgroupRoot).Output(attaches, nil)
 
 	err := t.App.Load()
 	t.Match(err, "cleanup previous state")
@@ -291,7 +291,7 @@ func TestAppLoad_BPFToolLoadallError(tt *testing.T) {
 	t.ExpectCleanup(errMockRemove)
 	t.ExpectTempFile()
 	t.ExpectCmd("bpftool", "prog", "loadall",
-		gomock.Any(), main.BPFDir, "pinmaps", main.BPFDir+"/maps",
+		gomock.Any(), internal.BPFDir, "pinmaps", internal.BPFDir+"/maps",
 	).Run(errMockLoadall)
 	t.ExpectCleanup(errMockRemove)
 
@@ -308,17 +308,17 @@ func TestAppLoad_AttachError(tt *testing.T) {
 	t.ExpectCleanup(errMockRemove)
 	t.ExpectTempFile()
 	t.ExpectCmd("bpftool", "prog", "loadall",
-		gomock.Any(), main.BPFDir, "pinmaps", main.BPFDir+"/maps",
+		gomock.Any(), internal.BPFDir, "pinmaps", internal.BPFDir+"/maps",
 	).Run(nil)
-	entries := main.CgroupAttaches()
+	entries := internal.CgroupAttaches()
 	for _, att := range entries[:len(entries)-1] {
 		t.ExpectCmd("bpftool", "cgroup", "attach",
-			main.CgroupRoot, att.AttachType, "pinned", filepath.Join(main.BPFDir, att.Name),
+			internal.CgroupRoot, att.AttachType, "pinned", filepath.Join(internal.BPFDir, att.Name),
 		).Run(nil)
 	}
 	lastAtt := entries[len(entries)-1]
 	t.ExpectCmd("bpftool", "cgroup", "attach",
-		main.CgroupRoot, lastAtt.AttachType, "pinned", filepath.Join(main.BPFDir, lastAtt.Name),
+		internal.CgroupRoot, lastAtt.AttachType, "pinned", filepath.Join(internal.BPFDir, lastAtt.Name),
 	).Run(errMockAttach)
 
 	t.ExpectCleanup(nil)
@@ -354,7 +354,7 @@ func TestAppLoad_Success(tt *testing.T) {
 func TestAppSetMark_Do(tt *testing.T) {
 	tt.Parallel()
 	t := newTestApp(tt)
-	t.TestDo(t.ExpectSetMarkSuccess, func() error { return t.App.SetMark(main.Mark(0x10000000)) })
+	t.TestDo(t.ExpectSetMarkSuccess, func() error { return t.App.SetMark(internal.Mark(0x10000000)) })
 }
 
 func TestAppSetMark_Success(tt *testing.T) {
@@ -365,7 +365,7 @@ func TestAppSetMark_Success(tt *testing.T) {
 	t.ExpectMounted()
 	t.ExpectSetMarkSuccess()
 
-	t.Nil(t.App.SetMark(main.Mark(0x10000000)))
+	t.Nil(t.App.SetMark(internal.Mark(0x10000000)))
 }
 
 func TestAppSetMark_Error(tt *testing.T) {
@@ -375,12 +375,12 @@ func TestAppSetMark_Error(tt *testing.T) {
 	t.ExpectRootCheckSuccess()
 	t.ExpectMounted()
 	t.ExpectCmd("bpftool", "map", "update",
-		"pinned", main.BPFDir+"/maps/same_cgroup_mark_cfg",
+		"pinned", internal.BPFDir+"/maps/same_cgroup_mark_cfg",
 		"key", "hex", "00", "00", "00", "00",
 		"value", "hex", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
 	).Run(errMockBpftool)
 
-	err := t.App.SetMark(main.Mark(0x10000000))
+	err := t.App.SetMark(internal.Mark(0x10000000))
 	t.Match(err, "bpftool map update")
 }
 
@@ -420,15 +420,15 @@ func TestAppUnload_CheckUnloadedBPFDirExists(tt *testing.T) {
 
 	t.ExpectRootCheckSuccess()
 	t.ExpectMounted()
-	for _, att := range main.CgroupAttaches() {
+	for _, att := range internal.CgroupAttaches() {
 		t.ExpectCmd("bpftool", "cgroup", "detach",
-			main.CgroupRoot, att.AttachType, "pinned", filepath.Join(main.BPFDir, att.Name),
+			internal.CgroupRoot, att.AttachType, "pinned", filepath.Join(internal.BPFDir, att.Name),
 		).Run(errMockRemove)
 	}
-	t.Expect.OsRemoveAll(main.BPFDir).Return(nil)
+	t.Expect.OsRemoveAll(internal.BPFDir).Return(nil)
 	// checkUnloaded: BPF pin directory still exists.
-	t.Expect.OsStat(main.BPFDir).Return(nil, nil)
-	t.ExpectCmd("bpftool", "--json", "cgroup", "show", main.CgroupRoot).Output([]byte("[]"), nil)
+	t.Expect.OsStat(internal.BPFDir).Return(nil, nil)
+	t.ExpectCmd("bpftool", "--json", "cgroup", "show", internal.CgroupRoot).Output([]byte("[]"), nil)
 
 	err := t.App.Unload()
 	t.Match(err, "BPF pin directory still exists")
@@ -440,15 +440,15 @@ func TestAppUnload_CheckUnloadedBPFDirStatError(tt *testing.T) {
 
 	t.ExpectRootCheckSuccess()
 	t.ExpectMounted()
-	for _, att := range main.CgroupAttaches() {
+	for _, att := range internal.CgroupAttaches() {
 		t.ExpectCmd("bpftool", "cgroup", "detach",
-			main.CgroupRoot, att.AttachType, "pinned", filepath.Join(main.BPFDir, att.Name),
+			internal.CgroupRoot, att.AttachType, "pinned", filepath.Join(internal.BPFDir, att.Name),
 		).Run(errMockRemove)
 	}
-	t.Expect.OsRemoveAll(main.BPFDir).Return(nil)
+	t.Expect.OsRemoveAll(internal.BPFDir).Return(nil)
 	// checkUnloaded: stat returns an unrelated error (not ErrNotExist).
-	t.Expect.OsStat(main.BPFDir).Return(nil, errMockStat)
-	t.ExpectCmd("bpftool", "--json", "cgroup", "show", main.CgroupRoot).Output([]byte("[]"), nil)
+	t.Expect.OsStat(internal.BPFDir).Return(nil, errMockStat)
+	t.ExpectCmd("bpftool", "--json", "cgroup", "show", internal.CgroupRoot).Output([]byte("[]"), nil)
 
 	err := t.App.Unload()
 	t.Match(err, "stat BPF pin dir")
@@ -460,16 +460,16 @@ func TestAppUnload_CheckUnloadedCgroupShowError(tt *testing.T) {
 
 	t.ExpectRootCheckSuccess()
 	t.ExpectMounted()
-	for _, att := range main.CgroupAttaches() {
+	for _, att := range internal.CgroupAttaches() {
 		t.ExpectCmd("bpftool", "cgroup", "detach",
-			main.CgroupRoot, att.AttachType, "pinned", filepath.Join(main.BPFDir, att.Name),
+			internal.CgroupRoot, att.AttachType, "pinned", filepath.Join(internal.BPFDir, att.Name),
 		).Run(errMockRemove)
 	}
-	t.Expect.OsRemoveAll(main.BPFDir).Return(nil)
+	t.Expect.OsRemoveAll(internal.BPFDir).Return(nil)
 	// checkUnloaded: BPF pin directory cleaned.
-	t.Expect.OsStat(main.BPFDir).Return(nil, os.ErrNotExist)
+	t.Expect.OsStat(internal.BPFDir).Return(nil, os.ErrNotExist)
 	// checkUnloaded: bpftool cgroup show fails.
-	t.ExpectCmd("bpftool", "--json", "cgroup", "show", main.CgroupRoot).Output(nil, errMockBpftool)
+	t.ExpectCmd("bpftool", "--json", "cgroup", "show", internal.CgroupRoot).Output(nil, errMockBpftool)
 
 	err := t.App.Unload()
 	t.Match(err, "cannot verify cgroup attachments")
@@ -481,14 +481,14 @@ func TestAppUnload_CheckUnloadedCgroupShowJSONError(tt *testing.T) {
 
 	t.ExpectRootCheckSuccess()
 	t.ExpectMounted()
-	for _, att := range main.CgroupAttaches() {
+	for _, att := range internal.CgroupAttaches() {
 		t.ExpectCmd("bpftool", "cgroup", "detach",
-			main.CgroupRoot, att.AttachType, "pinned", filepath.Join(main.BPFDir, att.Name),
+			internal.CgroupRoot, att.AttachType, "pinned", filepath.Join(internal.BPFDir, att.Name),
 		).Run(errMockRemove)
 	}
-	t.Expect.OsRemoveAll(main.BPFDir).Return(nil)
-	t.Expect.OsStat(main.BPFDir).Return(nil, os.ErrNotExist)
-	t.ExpectCmd("bpftool", "--json", "cgroup", "show", main.CgroupRoot).Output([]byte("not-json"), nil)
+	t.Expect.OsRemoveAll(internal.BPFDir).Return(nil)
+	t.Expect.OsStat(internal.BPFDir).Return(nil, os.ErrNotExist)
+	t.ExpectCmd("bpftool", "--json", "cgroup", "show", internal.CgroupRoot).Output([]byte("not-json"), nil)
 
 	err := t.App.Unload()
 	t.Match(err, "cannot verify cgroup attachments")

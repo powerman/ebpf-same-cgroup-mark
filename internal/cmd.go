@@ -1,6 +1,12 @@
-package main
+package internal
 
 import "errors"
+
+// CLI defines the command-line interface for the program.
+type CLI struct {
+	Load   LoadCmd   `cmd:"" help:"Load and attach the eBPF program."`
+	Unload UnloadCmd `cmd:"" help:"Detach and unload the eBPF program."`
+}
 
 // LoadCmd loads and attaches the eBPF program.
 type LoadCmd struct {
