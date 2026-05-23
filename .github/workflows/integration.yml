@@ -41,8 +41,8 @@ jobs:
               -o /tmp/bpftool.tar.gz
             tar xzf /tmp/bpftool.tar.gz -C /tmp/
             mkdir -p .cache/bpftool-bin
-            cp /tmp/bpftool/bpftool .cache/bpftool-bin/
-            sudo install -m 755 /tmp/bpftool/bpftool /usr/local/bin/
+            cp /tmp/bpftool .cache/bpftool-bin/
+            sudo install -m 755 /tmp/bpftool /usr/local/bin/
             rm -f /tmp/bpftool /tmp/bpftool.tar.gz
           fi
           bpftool --version
