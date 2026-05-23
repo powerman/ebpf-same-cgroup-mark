@@ -47,9 +47,6 @@ jobs:
       - name: Build
         run: mise run build
 
-      - name: Install bpftool system-wide
-        run: sudo install -m 755 "$(mise which -q bpftool)" /usr/local/sbin/
-
       - name: Clear kernel ring buffer
         if: always()
         run: sudo dmesg --clear
@@ -90,14 +87,12 @@ jobs:
       - name: Build
         run: mise run build
 
-      - name: Install bpftool system-wide
-        run: sudo install -m 755 "$(mise which -q bpftool)" /usr/local/sbin/
-
       - name: Clear kernel ring buffer
+        if: always()
         run: sudo dmesg --clear
 
       - name: Integration test
-        run: timeout 30 sudo -E bash .github/integration_test.sh
+        run: timeout 30 sudo -E "$(which mise)" exec -- bash .github/integration_test.sh
 
       - name: Show relevant kernel messages
         if: always()

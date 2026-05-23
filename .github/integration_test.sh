@@ -43,8 +43,7 @@ rule_packets() {
         sed -E 's/.*counter packets ([0-9]+).*/\1/'
 }
 
-info "PATH=$PATH"
-info "ls bpftool: $(ls -l $(which -a bpftool))"
+trap dmesg EXIT
 
 # Setup cgroup hierarchy.
 info "setting up cgroup hierarchy"
