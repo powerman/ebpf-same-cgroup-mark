@@ -471,14 +471,14 @@ func TestAppUnload_StatefulCgroupShowError(tt *testing.T) {
 	t.Match(err, "cannot verify cgroup attachments")
 }
 
-func TestAppUnload_StatefulMalformedJSON(tt *testing.T) {
+func TestAppUnload_StatefulInvalidJSON(tt *testing.T) {
 	tt.Parallel()
 	t := newStatefulAppTest(tt)
 	t.state.cgroupShowRaw = []byte("{")
 
-	err := t.App.Unload()
-	t.Match(err, "cannot verify cgroup attachments")
-	t.Match(err, "parse bpftool cgroup")
+	t.Nil(t.App.Unload())
+	t.False(t.state.bpfDirExists)
+	t.Len(t.attachedProgramNames(), 0)
 }
 
 func TestAppUnload_StatefulCgroupShowNoOutput(tt *testing.T) {

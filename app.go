@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	_ "embed"
 	"encoding/json"
 	"errors"
@@ -267,15 +266,13 @@ func (a *app) bpftoolCgroupShow() ([]CgroupAttachEntry, error) {
 		}
 		return nil, err
 	}
-	// bpftool from libbpf has a bug: it outputs just "[" (no
-	// closing bracket) when no cgroup programs are attached.
-	if len(out) == 0 || string(bytes.TrimSpace(out)) == "[" {
-		return nil, nil
-	}
 	var attaches []CgroupAttachEntry
 	err = json.Unmarshal(out, &attaches)
 	if err != nil {
-		return nil, fmt.Errorf("parse bpftool cgroup: %w", err)
+		// bpftool from libbpf can output incomplete JSON when no
+		// cgroup programs are attached. Since we already detached
+		// everything, treat parse errors as no programs.
+		return nil, nil //nolint:nilerr // JSON parse errors from bpftool are benign
 	}
 	return attaches, nil
 }

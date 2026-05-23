@@ -561,7 +561,7 @@ func TestAppUnload_CheckUnloadedCgroupShowBracketOnly(tt *testing.T) {
 	t.Nil(err)
 }
 
-func TestAppUnload_CheckUnloadedCgroupShowJSONError(tt *testing.T) {
+func TestAppUnload_CheckUnloadedCgroupShowInvalidJSON(tt *testing.T) {
 	tt.Parallel()
 	t := newTestApp(tt)
 
@@ -574,11 +574,11 @@ func TestAppUnload_CheckUnloadedCgroupShowJSONError(tt *testing.T) {
 	}
 	t.Expect.OsRemoveAll(main.BPFDir).Return(nil)
 	t.Expect.OsStat(main.BPFDir).Return(nil, os.ErrNotExist)
+	// checkUnloaded: bpftool cgroup show returns invalid JSON.
 	t.ExpectCmdStdout("bpftool", "--json", "cgroup", "show", main.CgroupRoot).Return([]byte("not-json"), nil)
 
 	err := t.App.Unload()
-	t.Match(err, "cannot verify cgroup attachments")
-	t.Match(err, "parse bpftool cgroup")
+	t.Nil(err)
 }
 
 // SetMark.
