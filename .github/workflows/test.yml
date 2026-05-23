@@ -48,7 +48,7 @@ jobs:
         run: mise run build
 
       - name: Install bpftool system-wide
-        run: sudo install -m 755 "$(mise which bpftool)" /usr/local/bin/
+        run: sudo install -m 755 "$(which bpftool)" /usr/local/bin/
 
       - name: Clear kernel ring buffer
         run: sudo dmesg --clear
@@ -90,7 +90,7 @@ jobs:
         run: mise run build
 
       - name: Install bpftool system-wide
-        run: sudo install -m 755 "$(mise which bpftool)" /usr/local/bin/
+        run: sudo install -m 755 "$(which bpftool)" /usr/local/bin/
 
       - name: Clear kernel ring buffer
         run: sudo dmesg --clear
