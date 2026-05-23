@@ -140,6 +140,17 @@ gotestsum -- \
 go tool cover -html=../{{vars.cover}} -o ../{{vars.cover}}.html
 '''
 
+# Generate Go mocks in /test submodule using mirrored directory structure.
+[tasks.mockgen]
+hide = true
+dir = "{{cwd}}"
+run = '''
+MODROOT=$(dirname "$(go env GOMOD)")
+PKGREL=$(realpath --relative-to="$MODROOT" .)
+mockgen -package="${GOPACKAGE}_test" -source="$GOFILE" \
+    -destination="$(realpath --relative-to=. "$MODROOT/test/$PKGREL")/mock.${GOFILE%%.go}_test.go"
+'''
+
 [tasks.cachedir]
 hide = true
 run = 'mkdir -p .cache'

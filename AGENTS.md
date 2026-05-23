@@ -132,6 +132,11 @@ NOTE: The above example does not mean you should break into very short lines as 
 
 - Tests must only test the project's own code, not stdlib or third-party libraries.
   Mock external dependencies (OS, exec) and test your logic, not the underlying library.
+- Use a **separate `test/` Go module** (`test/go.mod`) for test dependencies.
+  This prevents supply chain attacks by keeping test dependencies out of `go.mod`
+  of the main module — `go build` / `go install` won't download them.
+  Tests live in `test/internal/` (mirroring `internal/`), import the main module
+  via `replace` in `test/go.mod`, and use `package internal_test`.
 - Use an **external test package** (`package xxx_test`), including main package.
 - Name test functions as `TestFunc_Variant`, `TestTypeMethod_Variant` (`_Variant` optional).
 - Place test functions in same order as tested code.
@@ -139,11 +144,11 @@ NOTE: The above example does not mean you should break into very short lines as 
   begin most tests with `tt.Parallel()` and `t := check.T(tt).MustAll()`,
   use shortcut methods when available instead of `t.True(complex expression)`
   (e.g. `t.Nil(err)`, `t.Match(err, "substr")`, `t.Len(res)`, etc.
-- Generate mocks with `go.uber.org/mock/mockgen` using `//go:generate` in a file with interface:
 - Extensively use test helpers to reduce code duplication within and between tests.
+- Generate mocks with `go.uber.org/mock/mockgen` using `//go:generate` in a file with interface:
 
-  ```go
-  //go:generate mise exec -- sh -c "mockgen -package=\"${DOLLAR}1_test\" -source=\"${DOLLAR}2\" -destination=\"mock.$(basename \"${DOLLAR}2\" .go)_test.go\"" _ $GOPACKAGE $GOFILE
+  ```text
+  //go:generate mise run mockgen
   ```
 
 - Use `go.uber.org/mock/gomock` for expectations:
@@ -155,3 +160,4 @@ NOTE: The above example does not mean you should break into very short lines as 
 - If `mise.lock` does not exist, create it with `touch mise.lock`.
 - When verifying that `go build` succeeds, use `go build -o /dev/null .`
   to avoid leaving a binary in the repository root.
+- `mise run test` and `mise run cover:*` run from `test/` directory.

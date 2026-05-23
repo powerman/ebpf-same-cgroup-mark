@@ -1,4 +1,4 @@
-//go:generate mise exec -- sh -c "mockgen -package=\"${DOLLAR}1\" -source=\"${DOLLAR}2\" -destination=\"../test/internal/mock.$(basename \"${DOLLAR}2\" .go)_test.go\"" _ $GOPACKAGE $GOFILE
+//go:generate mise run mockgen
 
 // Package internal provides the eBPF program loader and CLI commands.
 package internal
