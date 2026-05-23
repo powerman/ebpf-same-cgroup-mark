@@ -33,22 +33,24 @@ jobs:
           # when the running kernel version differs from the installed
           # linux-tools-azure package, or because bpftool is missing from
           # some linux-tools-* packages on Ubuntu 24.04 (known bug).
-          # Try standalone bpftool package first, then fall back to
-          # finding any installed bpftool binary on the system.
-          sudo apt-get install -y --no-install-recommends bpftool 2>/dev/null || true
-          if ! command -v bpftool &>/dev/null; then
-            bpftool="$(find / -xdev -type f -name bpftool \
-              ! -path '/proc/*' ! -path '/sys/*' ! -path '/usr/lib/modules/*' \
-              2>/dev/null | head -1)"
-            if [ -n "$bpftool" ]; then
-              sudo ln -fs "$bpftool" /usr/local/bin/bpftool
-            else
-              # Build bpftool from the libbpf mirror repo.
-              git clone --depth 1 https://github.com/libbpf/bpftool.git \
-                /tmp/bpftool 2>/dev/null
-              make -s -C /tmp/bpftool/src -j"$(nproc)" 2>/dev/null
-              sudo cp /tmp/bpftool/src/bpftool /usr/local/bin/
-              rm -rf /tmp/bpftool
+          # Test if bpftool actually works, and if not, try to get a
+          # working binary via standalone package, filesystem search,
+          # or building from source.
+          if ! sudo bpftool --version &>/dev/null; then
+            sudo apt-get install -y --no-install-recommends bpftool 2>/dev/null || true
+            if ! sudo bpftool --version &>/dev/null; then
+              bpftool="$(find / -xdev -type f -name bpftool \
+                ! -path '/proc/*' ! -path '/sys/*' ! -path '/usr/lib/modules/*' \
+                2>/dev/null | head -1)"
+              if [ -n "$bpftool" ]; then
+                sudo ln -fs "$bpftool" /usr/local/bin/bpftool
+              else
+                # Build bpftool from the libbpf mirror repo.
+                git clone --depth 1 https://github.com/libbpf/bpftool.git /tmp/bpftool
+                make -s -C /tmp/bpftool/src -j"$(nproc)"
+                sudo cp /tmp/bpftool/src/bpftool /usr/local/bin/
+                rm -rf /tmp/bpftool
+              fi
             fi
           fi
 
