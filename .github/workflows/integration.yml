@@ -38,7 +38,8 @@ jobs:
           elif ! bpftool --version &>/dev/null; then
             git clone --depth 1 --recurse-submodules \
               https://github.com/libbpf/bpftool.git /tmp/bpftool
-            make -C /tmp/bpftool/src -j"$(nproc)" || test -x /tmp/bpftool/src/bpftool
+            make -C /tmp/bpftool/src -j"$(nproc)" || true
+            test -x /tmp/bpftool/src/bpftool
             mkdir -p .cache/bpftool-bin
             cp /tmp/bpftool/src/bpftool .cache/bpftool-bin/
             sudo install -m 755 /tmp/bpftool/src/bpftool /usr/local/bin/
