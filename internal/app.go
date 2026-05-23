@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"os/exec"
 	"path/filepath"
 	"slices"
 )
@@ -223,41 +224,50 @@ func (a *app) mountBPF() ([]byte, error) {
 }
 
 func (a *app) bpftoolLoadAll(bpfObjPath string) error {
-	return a.ExecCommand("bpftool", "prog", "loadall",
-		bpfObjPath, BPFDir, "pinmaps", BPFDir+"/maps",
-	).Run()
+	args := []string{"prog", "loadall", bpfObjPath, BPFDir, "pinmaps", BPFDir + "/maps"}
+	out, err := a.ExecCommand("bpftool", args...).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("bpftool loadall: %w\n%s", err, out)
+	}
+	return nil
 }
 
 func (a *app) bpftoolAttach(attachType, progPin string) error {
-	return a.ExecCommand("bpftool", "cgroup", "attach",
-		CgroupRoot, attachType, "pinned", progPin,
-	).Run()
+	args := []string{"cgroup", "attach", CgroupRoot, attachType, "pinned", progPin} //nolint:goconst // Leave "pinned" as is.
+	return a.ExecCommand("bpftool", args...).Run()
 }
 
 func (a *app) bpftoolDetach(attachType, progPin string) error {
-	return a.ExecCommand("bpftool", "cgroup", "detach",
-		CgroupRoot, attachType, "pinned", progPin,
-	).Run()
+	args := []string{"cgroup", "detach", CgroupRoot, attachType, "pinned", progPin}
+	return a.ExecCommand("bpftool", args...).Run()
 }
 
 func (a *app) bpftoolMapUpdateMark(m Mark) error {
 	leBytes := m.ToLE()
-	return a.ExecCommand("bpftool", "map", "update",
-		"pinned", BPFDir+"/maps/same_cgroup_mark_cfg",
+	args := []string{
+		"map", "update",
+		"pinned", BPFDir + "/maps/same_cgroup_mark_cfg",
 		"key", "hex", "00", "00", "00", "00",
 		"value", "hex", leBytes[0], leBytes[1], leBytes[2], leBytes[3],
-	).Run()
+	}
+	return a.ExecCommand("bpftool", args...).Run()
 }
 
 func (a *app) bpftoolCgroupShow() ([]CgroupAttach, error) {
 	out, err := a.ExecCommand("bpftool", "--json", "cgroup", "show", CgroupRoot).Output()
 	if err != nil {
+		if err, ok := errors.AsType[*exec.ExitError](err); ok && err.ExitCode() == 2 { //nolint:noinlineerr // False positive.
+			return nil, nil
+		}
 		return nil, err
 	}
 	var attaches []CgroupAttach
 	err = json.Unmarshal(out, &attaches)
 	if err != nil {
-		return nil, fmt.Errorf("parse bpftool cgroup: %w", err)
+		// bpftool from libbpf can output incomplete JSON when no
+		// cgroup programs are attached. Since we already detached
+		// everything, treat parse errors as no programs.
+		return nil, nil //nolint:nilerr // JSON parse errors from bpftool are benign
 	}
 	return attaches, nil
 }

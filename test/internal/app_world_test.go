@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -186,12 +187,12 @@ func (m *mockWorld) ExecCommand(name string, args ...string) internal.WorldExecC
 
 	case name == "bpftool" && len(args) >= 2 && args[0] == "prog" && args[1] == "loadall":
 		return &worldCmdMock{
-			runFn: func() error {
+			combinedOutputFn: func() ([]byte, error) {
 				if m.state.loadallErr != nil {
-					return m.state.loadallErr
+					return nil, m.state.loadallErr
 				}
 				m.state.bpfDirExists = true
-				return nil
+				return nil, nil
 			},
 		}
 
@@ -488,14 +489,46 @@ func TestAppUnload_StatefulCgroupShowError(tt *testing.T) {
 	t.Match(err, "cannot verify cgroup attachments")
 }
 
-func TestAppUnload_StatefulMalformedJSON(tt *testing.T) {
+func TestAppUnload_StatefulCgroupShowExitCode2(tt *testing.T) {
+	tt.Parallel()
+	t := newStatefulAppTest(tt)
+
+	cmd := exec.Command("sh", "-c", "exit 2") //nolint:noctx // Trivial, exits immediately.
+	t.state.cgroupShowErr = cmd.Run()
+
+	t.Nil(t.App.Unload())
+	t.False(t.state.bpfDirExists)
+	t.Len(t.attachedProgramNames(), 0)
+}
+
+func TestAppUnload_StatefulInvalidJSON(tt *testing.T) {
 	tt.Parallel()
 	t := newStatefulAppTest(tt)
 	t.state.cgroupShowRaw = []byte("{")
 
-	err := t.App.Unload()
-	t.Match(err, "cannot verify cgroup attachments")
-	t.Match(err, "parse bpftool cgroup")
+	t.Nil(t.App.Unload())
+	t.False(t.state.bpfDirExists)
+	t.Len(t.attachedProgramNames(), 0)
+}
+
+func TestAppUnload_StatefulCgroupShowNoOutput(tt *testing.T) {
+	tt.Parallel()
+	t := newStatefulAppTest(tt)
+	t.state.cgroupShowRaw = []byte{}
+
+	t.Nil(t.App.Unload())
+	t.False(t.state.bpfDirExists)
+	t.Len(t.attachedProgramNames(), 0)
+}
+
+func TestAppUnload_StatefulCgroupShowBracketOnly(tt *testing.T) {
+	tt.Parallel()
+	t := newStatefulAppTest(tt)
+	t.state.cgroupShowRaw = []byte("[")
+
+	t.Nil(t.App.Unload())
+	t.False(t.state.bpfDirExists)
+	t.Len(t.attachedProgramNames(), 0)
 }
 
 func TestAppSetMark_StatefulDoFailures(tt *testing.T) {

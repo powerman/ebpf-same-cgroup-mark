@@ -3,6 +3,7 @@ package internal_test
 import (
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -80,7 +81,7 @@ func (t *testApp) ExpectLoadSuccess() {
 	t.ExpectTempFile()
 	t.ExpectCmd("bpftool", "prog", "loadall",
 		gomock.Any(), internal.BPFDir, "pinmaps", internal.BPFDir+"/maps",
-	).Run(nil)
+	).CombinedOutput(nil, nil)
 	for _, att := range internal.CgroupAttaches() {
 		t.ExpectCmd("bpftool", "cgroup", "attach",
 			internal.CgroupRoot, att.AttachType, "pinned", filepath.Join(internal.BPFDir, att.Name),
@@ -292,7 +293,7 @@ func TestAppLoad_BPFToolLoadallError(tt *testing.T) {
 	t.ExpectTempFile()
 	t.ExpectCmd("bpftool", "prog", "loadall",
 		gomock.Any(), internal.BPFDir, "pinmaps", internal.BPFDir+"/maps",
-	).Run(errMockLoadall)
+	).CombinedOutput(nil, errMockLoadall)
 	t.ExpectCleanup(errMockRemove)
 
 	err := t.App.Load()
@@ -309,7 +310,7 @@ func TestAppLoad_AttachError(tt *testing.T) {
 	t.ExpectTempFile()
 	t.ExpectCmd("bpftool", "prog", "loadall",
 		gomock.Any(), internal.BPFDir, "pinmaps", internal.BPFDir+"/maps",
-	).Run(nil)
+	).CombinedOutput(nil, nil)
 	entries := internal.CgroupAttaches()
 	for _, att := range entries[:len(entries)-1] {
 		t.ExpectCmd("bpftool", "cgroup", "attach",
@@ -475,7 +476,75 @@ func TestAppUnload_CheckUnloadedCgroupShowError(tt *testing.T) {
 	t.Match(err, "cannot verify cgroup attachments")
 }
 
-func TestAppUnload_CheckUnloadedCgroupShowJSONError(tt *testing.T) {
+func TestAppUnload_CheckUnloadedCgroupShowExitCode2(tt *testing.T) {
+	tt.Parallel()
+	t := newTestApp(tt)
+
+	cmd := exec.Command("sh", "-c", "exit 2") //nolint:noctx // Trivial, exits immediately.
+	exitErr2 := cmd.Run()
+
+	t.ExpectRootCheckSuccess()
+	t.ExpectMounted()
+	for _, att := range internal.CgroupAttaches() {
+		t.ExpectCmd("bpftool", "cgroup", "detach",
+			internal.CgroupRoot, att.AttachType, "pinned", filepath.Join(internal.BPFDir, att.Name),
+		).Run(errMockRemove)
+	}
+	t.Expect.OsRemoveAll(internal.BPFDir).Return(nil)
+	// checkUnloaded: BPF pin directory cleaned.
+	t.Expect.OsStat(internal.BPFDir).Return(nil, os.ErrNotExist)
+	// checkUnloaded: bpftool cgroup show exits with code 2 (no programs).
+	t.ExpectCmd("bpftool", "--json", "cgroup", "show", internal.CgroupRoot).Output(nil, exitErr2)
+
+	err := t.App.Unload()
+	t.Nil(err)
+}
+
+func TestAppUnload_CheckUnloadedCgroupShowEmptyOutput(tt *testing.T) {
+	tt.Parallel()
+	t := newTestApp(tt)
+
+	t.ExpectRootCheckSuccess()
+	t.ExpectMounted()
+	for _, att := range internal.CgroupAttaches() {
+		t.ExpectCmd("bpftool", "cgroup", "detach",
+			internal.CgroupRoot, att.AttachType, "pinned", filepath.Join(internal.BPFDir, att.Name),
+		).Run(errMockRemove)
+	}
+	t.Expect.OsRemoveAll(internal.BPFDir).Return(nil)
+	// checkUnloaded: BPF pin directory cleaned.
+	t.Expect.OsStat(internal.BPFDir).Return(nil, os.ErrNotExist)
+	// checkUnloaded: bpftool cgroup show returns empty output (no programs).
+	t.ExpectCmd("bpftool", "--json", "cgroup", "show", internal.CgroupRoot).Output([]byte{}, nil)
+
+	err := t.App.Unload()
+	t.Nil(err)
+}
+
+func TestAppUnload_CheckUnloadedCgroupShowBracketOnly(tt *testing.T) {
+	tt.Parallel()
+	t := newTestApp(tt)
+
+	t.ExpectRootCheckSuccess()
+	t.ExpectMounted()
+	for _, att := range internal.CgroupAttaches() {
+		t.ExpectCmd("bpftool", "cgroup", "detach",
+			internal.CgroupRoot, att.AttachType, "pinned", filepath.Join(internal.BPFDir, att.Name),
+		).Run(errMockRemove)
+	}
+	t.Expect.OsRemoveAll(internal.BPFDir).Return(nil)
+	// checkUnloaded: BPF pin directory cleaned.
+	t.Expect.OsStat(internal.BPFDir).Return(nil, os.ErrNotExist)
+	// checkUnloaded: bpftool cgroup show returns just "[" (bpftool bug).
+
+	out := []byte("[")
+	t.ExpectCmd("bpftool", "--json", "cgroup", "show", internal.CgroupRoot).Output(out, nil)
+
+	err := t.App.Unload()
+	t.Nil(err)
+}
+
+func TestAppUnload_CheckUnloadedCgroupShowInvalidJSON(tt *testing.T) {
 	tt.Parallel()
 	t := newTestApp(tt)
 
@@ -491,6 +560,5 @@ func TestAppUnload_CheckUnloadedCgroupShowJSONError(tt *testing.T) {
 	t.ExpectCmd("bpftool", "--json", "cgroup", "show", internal.CgroupRoot).Output([]byte("not-json"), nil)
 
 	err := t.App.Unload()
-	t.Match(err, "cannot verify cgroup attachments")
-	t.Match(err, "parse bpftool cgroup")
+	t.Nil(err)
 }

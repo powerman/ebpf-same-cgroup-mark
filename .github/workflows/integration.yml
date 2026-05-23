@@ -1,0 +1,59 @@
+name: Integration
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Cache bpftool
+        uses: actions/cache@v4
+        with:
+          path: .cache/bpftool-bin
+          key: bpftool-v7.7.0
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            clang libbpf-dev nftables socat
+          if test -f .cache/bpftool-bin/bpftool; then
+            sudo install -m 755 .cache/bpftool-bin/bpftool /usr/local/bin/
+          else
+            curl -sL \
+              https://github.com/libbpf/bpftool/releases/download/v7.7.0/bpftool-v7.7.0-amd64.tar.gz \
+              -o /tmp/bpftool.tar.gz
+            tar xzf /tmp/bpftool.tar.gz -C /tmp/
+            mkdir -p .cache/bpftool-bin
+            cp /tmp/bpftool .cache/bpftool-bin/
+            sudo install -m 755 /tmp/bpftool /usr/local/bin/
+            rm -f /tmp/bpftool /tmp/bpftool.tar.gz
+          fi
+          bpftool --version
+
+      - uses: jdx/mise-action@v4
+      - run: git reset --hard
+
+      - uses: powerman/.github/.github/actions/cache-go-and-tools@main
+
+      - name: Build
+        run: mise run build
+
+      - name: Integration test
+        run: sudo -E bash .github/integration_test.sh
