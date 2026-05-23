@@ -48,9 +48,10 @@ jobs:
         run: mise run build
 
       - name: Install bpftool system-wide
-        run: sudo install -m 755 "$(mise which -q bpftool)" /usr/local/bin/
+        run: sudo install -m 755 "$(mise which -q bpftool)" /usr/local/sbin/
 
       - name: Clear kernel ring buffer
+        if: always()
         run: sudo dmesg --clear
 
       - name: Integration test
@@ -58,7 +59,7 @@ jobs:
 
       - name: Show relevant kernel messages
         if: always()
-        run: sudo dmesg | grep -aiE 'mark|same_cgroup' | tail -20 || true
+        run: sudo dmesg
 
   # Testing on available native platforms.
   native:
@@ -90,7 +91,7 @@ jobs:
         run: mise run build
 
       - name: Install bpftool system-wide
-        run: sudo install -m 755 "$(mise which -q bpftool)" /usr/local/bin/
+        run: sudo install -m 755 "$(mise which -q bpftool)" /usr/local/sbin/
 
       - name: Clear kernel ring buffer
         run: sudo dmesg --clear

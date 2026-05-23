@@ -13,35 +13,38 @@ PORT_OTHER=18081
 info() { echo "[$(date '+%H:%M:%S')] $*" >&2; }
 
 socat_listen() {
-	socat "TCP-LISTEN:$1,bind=127.0.0.1,reuseaddr" \
-		OPEN:/dev/null,trunc &
+    socat "TCP-LISTEN:$1,bind=127.0.0.1,reuseaddr" \
+        OPEN:/dev/null,trunc &
 }
 
 socat_connect() {
-	printf 'ping\n' | socat - \
-		"TCP:127.0.0.1:$1,connect-timeout=5" >/dev/null
+    printf 'ping\n' | socat - \
+        "TCP:127.0.0.1:$1,connect-timeout=5" >/dev/null
 }
 
 wait_port() {
-	local port="$1"
-	local pid="${2:-}"
-	for _ in $(seq 100); do
-		if ss -ltn "sport = :$port" | grep -q LISTEN; then
-			return 0
-		fi
-		if [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; then
-			return 1
-		fi
-		sleep 0.1
-	done
-	return 1
+    local port="$1"
+    local pid="${2:-}"
+    for _ in $(seq 100); do
+        if ss -ltn "sport = :$port" | grep -q LISTEN; then
+            return 0
+        fi
+        if [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; then
+            return 1
+        fi
+        sleep 0.1
+    done
+    return 1
 }
 
 rule_packets() {
-	nft list chain inet "$TABLE" output |
-		grep "dport $1" |
-		sed -E 's/.*counter packets ([0-9]+).*/\1/'
+    nft list chain inet "$TABLE" output |
+        grep "dport $1" |
+        sed -E 's/.*counter packets ([0-9]+).*/\1/'
 }
+
+info "PATH=$PATH"
+info "which bpftool: $(which -a bpftool)"
 
 # Setup cgroup hierarchy.
 info "setting up cgroup hierarchy"
@@ -59,11 +62,11 @@ wait "$PRE_CHECK_PID" 2>/dev/null || true
 info "configuring nftables rules"
 nft add table inet "$TABLE"
 nft add chain inet "$TABLE" output \
-	'{ type filter hook output priority 0; policy accept; }'
+    '{ type filter hook output priority 0; policy accept; }'
 nft add rule inet "$TABLE" output \
-	tcp dport "$PORT_SAME" meta mark \& "$MARK" == "$MARK" counter
+    tcp dport "$PORT_SAME" meta mark \& "$MARK" == "$MARK" counter
 nft add rule inet "$TABLE" output \
-	tcp dport "$PORT_OTHER" meta mark \& "$MARK" == "$MARK" counter
+    tcp dport "$PORT_OTHER" meta mark \& "$MARK" == "$MARK" counter
 
 # Load BPF program.
 info "loading BPF program"
@@ -87,9 +90,9 @@ socat_listen "$PORT_OTHER"
 PID_NEG=$!
 wait_port "$PORT_OTHER" "$PID_NEG"
 (
-	echo "$BASHPID" >"$OTHER_CGROUP/cgroup.procs"
-	printf 'ping\n' | timeout 10 socat - \
-		"TCP:127.0.0.1:$PORT_OTHER,connect-timeout=5" >/dev/null
+    echo "$BASHPID" >"$OTHER_CGROUP/cgroup.procs"
+    printf 'ping\n' | timeout 10 socat - \
+        "TCP:127.0.0.1:$PORT_OTHER,connect-timeout=5" >/dev/null
 )
 wait "$PID_NEG"
 
