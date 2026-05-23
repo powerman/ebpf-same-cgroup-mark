@@ -27,7 +27,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            clang llvm libbpf-dev
+            clang llvm libbpf-dev nftables socat
 
       - uses: jdx/mise-action@v4
       - run: git reset --hard # Work around https://github.com/jdx/mise/discussions/8270.
@@ -40,6 +40,12 @@ jobs:
         if: github.ref_name == 'main'
         with:
           total_cmd: "mise run -q cover:go:total | tail -n 1 | sed -e 's/.*)//'"
+
+      - name: Build
+        run: mise run build
+
+      - name: Integration test
+        run: timeout 30 sudo -E "$(which mise)" exec -- bash .github/integration_test.sh
 
   # Testing on available native platforms.
   native:
@@ -57,12 +63,18 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            clang llvm libbpf-dev
+            clang llvm libbpf-dev nftables socat
 
       - uses: jdx/mise-action@v4
       - run: git reset --hard # Work around https://github.com/jdx/mise/discussions/8270.
 
       - run: mise run test
+
+      - name: Build
+        run: mise run build
+
+      - name: Integration test
+        run: timeout 30 sudo -E "$(which mise)" exec -- bash .github/integration_test.sh
 
   # Aggregate job for branch protection.
   test:
