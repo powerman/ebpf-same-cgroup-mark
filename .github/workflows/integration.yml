@@ -31,8 +31,12 @@ jobs:
           # The bpftool wrapper from linux-tools-common dispatches to
           # /usr/lib/linux-tools-$(uname -r)/bpftool, which may not exist
           # when the running kernel version differs from the installed
-          # linux-tools-azure package. Create a direct symlink as fallback.
-          bpftool="$(find /usr/lib -maxdepth 3 -type f -name bpftool -path '*/linux-tools-*' 2>/dev/null | head -1)"
+          # linux-tools-azure package. Try to install the exact version
+          # first, then fall back to finding and symlinking any bpftool.
+          sudo apt-get install -y --no-install-recommends \
+            "linux-tools-$(uname -r)" 2>/dev/null || true
+          bpftool="$(find /usr/lib -maxdepth 3 -type f -name bpftool \
+            ! -path '/usr/lib/modules/*' 2>/dev/null | head -1)"
           if [ -n "$bpftool" ]; then
             sudo ln -fs "$bpftool" /usr/local/bin/bpftool
           fi
