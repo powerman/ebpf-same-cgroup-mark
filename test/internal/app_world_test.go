@@ -4,14 +4,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
+	"strings"
 	"testing"
-	"time"
+	"testing/fstest"
 
 	"github.com/powerman/check"
 
@@ -33,49 +35,48 @@ var (
 	errWorldWrite       = errors.New("world write error")
 )
 
+// trimRoot strips the leading "/" from absolute paths
+// so they can be used as keys in fstest.MapFS.
+func trimRoot(p string) string { return strings.TrimLeft(p, "/") }
+
+// worldState holds the current state of the simulated world.
 type worldState struct {
-	euid         int
-	mounted      bool
-	bpfDirExists bool
-	attached     map[string]struct{}
-	tempFiles    map[string]struct{}
-	nextTempID   int
-	markBytes    [4]string
+	euid       int
+	mounted    bool
+	fs         fstest.MapFS
+	tempFiles  map[string]struct{}
+	nextTempID int
+	attached   map[string]struct{}
+	markBytes  [4]string
+}
 
-	mkdirErr      error
-	mountErr      error
+// faults configures which operations should return errors.
+type faults struct {
+	mkdir         error
+	mount         error
 	mountOutput   []byte
-	createTempErr error
-	tempWriteErr  error
-	tempCloseErr  error
-	loadallErr    error
-	mapUpdateErr  error
-	cgroupShowErr error
+	createTemp    error
+	tempWrite     error
+	tempClose     error
+	loadall       error
+	mapUpdate     error
+	cgroupShow    error
 	cgroupShowRaw []byte
-	statErr       error
-	removeAllErr  error
-	removeErr     error
-
-	attachErr map[string]error
-	detachErr map[string]error
+	stat          error
+	removeAll     error
+	remove        error
+	attach        map[string]error
+	detach        map[string]error
 }
 
 type statefulAppTest struct {
 	*check.C
 
-	World *mockWorld
-	App   internal.App
-	state *worldState
+	World  *mockWorld
+	App    internal.App
+	state  *worldState
+	faults *faults
 }
-
-type dummyFileInfo struct{}
-
-func (dummyFileInfo) Name() string       { return "" }
-func (dummyFileInfo) Size() int64        { return 0 }
-func (dummyFileInfo) Mode() os.FileMode  { return 0o750 }
-func (dummyFileInfo) ModTime() time.Time { return time.Time{} }
-func (dummyFileInfo) IsDir() bool        { return true }
-func (dummyFileInfo) Sys() any           { return nil }
 
 func cgroupShowJSONWorld(names ...string) []byte {
 	entries := make([]internal.CgroupAttach, 0, len(names))
@@ -98,52 +99,60 @@ func newStatefulAppTest(tt *testing.T) *statefulAppTest {
 	t.state = &worldState{
 		euid:      0,
 		mounted:   true,
-		attached:  make(map[string]struct{}),
+		fs:        make(fstest.MapFS),
 		tempFiles: make(map[string]struct{}),
-		attachErr: make(map[string]error),
-		detachErr: make(map[string]error),
+		attached:  make(map[string]struct{}),
 	}
-	t.World = &mockWorld{state: t.state}
+	t.faults = &faults{
+		attach: make(map[string]error),
+		detach: make(map[string]error),
+	}
+	t.World = &mockWorld{state: t.state, faults: t.faults}
 	t.App = internal.NewApp(t.World, testBPFObj)
 
 	return t
 }
 
-// mockWorld implements main.World with stateful behavior driven by worldState.
+// mockWorld implements main.World with stateful behavior driven by worldState and faults.
 type mockWorld struct {
-	state *worldState
+	state  *worldState
+	faults *faults
 }
 
 func (m *mockWorld) OsGeteuid() int { return m.state.euid }
 
-func (m *mockWorld) OsMkdirAll(_ string, _ os.FileMode) error { return m.state.mkdirErr }
-
-func (m *mockWorld) OsRemove(name string) error {
-	delete(m.state.tempFiles, name)
-	return m.state.removeErr
-}
-
-func (m *mockWorld) OsRemoveAll(_ string) error {
-	if m.state.removeAllErr != nil {
-		return m.state.removeAllErr
+func (m *mockWorld) OsMkdirAll(path string, perm os.FileMode) error {
+	if m.faults.mkdir != nil {
+		return m.faults.mkdir
 	}
-	m.state.bpfDirExists = false
+	m.state.fs[trimRoot(path)] = &fstest.MapFile{Mode: os.ModeDir | perm}
 	return nil
 }
 
-func (m *mockWorld) OsStat(_ string) (os.FileInfo, error) {
-	if m.state.statErr != nil {
-		return nil, m.state.statErr
+func (m *mockWorld) OsRemove(name string) error {
+	delete(m.state.tempFiles, name)
+	delete(m.state.fs, trimRoot(name))
+	return m.faults.remove
+}
+
+func (m *mockWorld) OsRemoveAll(path string) error {
+	if m.faults.removeAll != nil {
+		return m.faults.removeAll
 	}
-	if m.state.bpfDirExists {
-		return dummyFileInfo{}, nil
+	delete(m.state.fs, trimRoot(path))
+	return nil
+}
+
+func (m *mockWorld) OsStat(name string) (os.FileInfo, error) {
+	if m.faults.stat != nil {
+		return nil, m.faults.stat
 	}
-	return nil, os.ErrNotExist
+	return fs.Stat(m.state.fs, trimRoot(name))
 }
 
 func (m *mockWorld) OsCreateTemp(_, _ string) (internal.WorldOsFile, error) {
-	if m.state.createTempErr != nil {
-		return nil, m.state.createTempErr
+	if m.faults.createTemp != nil {
+		return nil, m.faults.createTemp
 	}
 	path := "/tmp/stateful-" + strconv.Itoa(m.state.nextTempID) + ".bpf.o"
 	m.state.nextTempID++
@@ -151,13 +160,13 @@ func (m *mockWorld) OsCreateTemp(_, _ string) (internal.WorldOsFile, error) {
 	return &mockOsFile{
 		name: path,
 		writeFn: func(_ []byte) (int, error) {
-			if m.state.tempWriteErr != nil {
-				return 0, m.state.tempWriteErr
+			if m.faults.tempWrite != nil {
+				return 0, m.faults.tempWrite
 			}
 			return len(testBPFObj), nil
 		},
 		closeFn: func() error {
-			return m.state.tempCloseErr
+			return m.faults.tempClose
 		},
 	}, nil
 }
@@ -177,8 +186,8 @@ func (m *mockWorld) ExecCommand(name string, args ...string) internal.WorldExecC
 	case name == "mount" && slices.Equal(args, []string{"-t", "bpf", "bpf", internal.BPFRoot}):
 		return &worldCmdMock{
 			combinedOutputFn: func() ([]byte, error) {
-				if m.state.mountErr != nil {
-					return m.state.mountOutput, m.state.mountErr
+				if m.faults.mount != nil {
+					return m.faults.mountOutput, m.faults.mount
 				}
 				m.state.mounted = true
 				return nil, nil
@@ -188,10 +197,10 @@ func (m *mockWorld) ExecCommand(name string, args ...string) internal.WorldExecC
 	case name == "bpftool" && len(args) >= 2 && args[0] == "prog" && args[1] == "loadall":
 		return &worldCmdMock{
 			combinedOutputFn: func() ([]byte, error) {
-				if m.state.loadallErr != nil {
-					return nil, m.state.loadallErr
+				if m.faults.loadall != nil {
+					return nil, m.faults.loadall
 				}
-				m.state.bpfDirExists = true
+				m.state.fs[trimRoot(internal.BPFDir)] = &fstest.MapFile{Mode: os.ModeDir | internal.BPFMode}
 				return nil, nil
 			},
 		}
@@ -201,11 +210,11 @@ func (m *mockWorld) ExecCommand(name string, args ...string) internal.WorldExecC
 		return &worldCmdMock{
 			runFn: func() error {
 				progName := filepath.Base(args[5])
-				err := m.state.attachErr[progName]
+				err := m.faults.attach[progName]
 				if err != nil {
 					return err
 				}
-				m.state.bpfDirExists = true
+				m.state.fs[trimRoot(internal.BPFDir)] = &fstest.MapFile{Mode: os.ModeDir | internal.BPFMode}
 				m.state.attached[progName] = struct{}{}
 				return nil
 			},
@@ -216,7 +225,7 @@ func (m *mockWorld) ExecCommand(name string, args ...string) internal.WorldExecC
 		return &worldCmdMock{
 			runFn: func() error {
 				progName := filepath.Base(args[5])
-				err := m.state.detachErr[progName]
+				err := m.faults.detach[progName]
 				if err != nil {
 					return err
 				}
@@ -230,8 +239,8 @@ func (m *mockWorld) ExecCommand(name string, args ...string) internal.WorldExecC
 		args[2] == "pinned" && args[3] == internal.BPFDir+"/maps/same_cgroup_mark_cfg":
 		return &worldCmdMock{
 			runFn: func() error {
-				if m.state.mapUpdateErr != nil {
-					return m.state.mapUpdateErr
+				if m.faults.mapUpdate != nil {
+					return m.faults.mapUpdate
 				}
 				last := len(args) - 4
 				m.state.markBytes = [4]string{args[last], args[last+1], args[last+2], args[last+3]}
@@ -242,11 +251,11 @@ func (m *mockWorld) ExecCommand(name string, args ...string) internal.WorldExecC
 	case name == "bpftool" && slices.Equal(args, []string{"--json", "cgroup", "show", internal.CgroupRoot}):
 		return &worldCmdMock{
 			outputFn: func() ([]byte, error) {
-				if m.state.cgroupShowErr != nil {
-					return nil, m.state.cgroupShowErr
+				if m.faults.cgroupShow != nil {
+					return nil, m.faults.cgroupShow
 				}
-				if m.state.cgroupShowRaw != nil {
-					return m.state.cgroupShowRaw, nil
+				if m.faults.cgroupShowRaw != nil {
+					return m.faults.cgroupShowRaw, nil
 				}
 				return cgroupShowJSONWorld(slices.Sorted(maps.Keys(m.state.attached))...), nil
 			},
@@ -307,8 +316,11 @@ func (t *statefulAppTest) attachedProgramNames() []string {
 
 func (t *statefulAppTest) assertClean() {
 	t.Len(t.attachedProgramNames(), 0)
-	t.False(t.state.bpfDirExists)
 	t.Len(t.state.tempFiles, 0)
+	_, err := fs.Stat(t.state.fs, trimRoot(internal.BPFDir))
+	if !errors.Is(err, fs.ErrNotExist) {
+		t.Fatal("expected BPF dir to not exist, but it does")
+	}
 }
 
 func (t *statefulAppTest) assertAttachedAll() {
@@ -333,7 +345,7 @@ func runDoFailures(tt *testing.T, call func(t *statefulAppTest) error) {
 		tt.Parallel()
 		t := newStatefulAppTest(tt)
 		t.state.mounted = false
-		t.state.mkdirErr = errWorldMkdir
+		t.faults.mkdir = errWorldMkdir
 		t.Match(call(t), errWorldMkdir.Error())
 	})
 
@@ -341,8 +353,8 @@ func runDoFailures(tt *testing.T, call func(t *statefulAppTest) error) {
 		tt.Parallel()
 		t := newStatefulAppTest(tt)
 		t.state.mounted = false
-		t.state.mountErr = errWorldMountFailed
-		t.state.mountOutput = []byte("mount failure details")
+		t.faults.mount = errWorldMountFailed
+		t.faults.mountOutput = []byte("mount failure details")
 		t.Match(call(t), "mount bpf")
 	})
 }
@@ -360,9 +372,9 @@ func TestAppLoad_StatefulWriteTempErrors(tt *testing.T) {
 		setup    func(t *statefulAppTest)
 		errMatch string
 	}{
-		{name: "CreateError", setup: func(t *statefulAppTest) { t.state.createTempErr = errWorldMkdir }, errMatch: "create temp file"},
-		{name: "WriteError", setup: func(t *statefulAppTest) { t.state.tempWriteErr = errWorldWrite }, errMatch: "write temp file"},
-		{name: "CloseError", setup: func(t *statefulAppTest) { t.state.tempCloseErr = errWorldClose }, errMatch: "close temp file"},
+		{name: "CreateError", setup: func(t *statefulAppTest) { t.faults.createTemp = errWorldMkdir }, errMatch: "create temp file"},
+		{name: "WriteError", setup: func(t *statefulAppTest) { t.faults.tempWrite = errWorldWrite }, errMatch: "write temp file"},
+		{name: "CloseError", setup: func(t *statefulAppTest) { t.faults.tempClose = errWorldClose }, errMatch: "close temp file"},
 	}
 
 	for _, tc := range tests {
@@ -380,9 +392,9 @@ func TestAppLoad_StatefulWriteTempErrors(tt *testing.T) {
 func TestAppLoad_StatefulCleanupPreviousStateError(tt *testing.T) {
 	tt.Parallel()
 	t := newStatefulAppTest(tt)
-	t.state.bpfDirExists = true
+	t.state.fs[trimRoot(internal.BPFDir)] = &fstest.MapFile{Mode: os.ModeDir | internal.BPFMode}
 	t.state.attached["same_cgroup_bind4"] = struct{}{}
-	t.state.detachErr["same_cgroup_bind4"] = errWorldRemove
+	t.faults.detach["same_cgroup_bind4"] = errWorldRemove
 
 	err := t.App.Load()
 	t.Match(err, "cleanup previous state")
@@ -392,11 +404,10 @@ func TestAppLoad_StatefulCleanupPreviousStateError(tt *testing.T) {
 func TestAppLoad_StatefulLoadallError(tt *testing.T) {
 	tt.Parallel()
 	t := newStatefulAppTest(tt)
-	t.state.loadallErr = errWorldLoadall
+	t.faults.loadall = errWorldLoadall
 
 	err := t.App.Load()
 	t.Match(err, "bpftool loadall")
-	// The temp object is cleaned up by deferred OsRemove.
 	t.assertClean()
 }
 
@@ -404,7 +415,7 @@ func TestAppLoad_StatefulAttachErrorRollsBack(tt *testing.T) {
 	tt.Parallel()
 	t := newStatefulAppTest(tt)
 	entries := internal.CgroupAttaches()
-	t.state.attachErr[entries[len(entries)-1].Name] = errWorldAttach
+	t.faults.attach[entries[len(entries)-1].Name] = errWorldAttach
 
 	err := t.App.Load()
 	t.Match(err, "bpftool attach")
@@ -417,7 +428,8 @@ func TestAppLoad_StatefulSuccessMounted(tt *testing.T) {
 
 	t.Nil(t.App.Load())
 	t.True(t.state.mounted)
-	t.True(t.state.bpfDirExists)
+	_, err := fs.Stat(t.state.fs, trimRoot(internal.BPFDir))
+	t.Nil(err)
 	t.assertAttachedAll()
 	t.Len(t.state.tempFiles, 0)
 }
@@ -429,7 +441,8 @@ func TestAppLoad_StatefulSuccessMountFresh(tt *testing.T) {
 
 	t.Nil(t.App.Load())
 	t.True(t.state.mounted)
-	t.True(t.state.bpfDirExists)
+	_, err := fs.Stat(t.state.fs, trimRoot(internal.BPFDir))
+	t.Nil(err)
 	t.assertAttachedAll()
 }
 
@@ -443,28 +456,26 @@ func TestAppUnload_StatefulWithoutBPF(tt *testing.T) {
 	t := newStatefulAppTest(tt)
 
 	t.Nil(t.App.Unload())
-	t.False(t.state.bpfDirExists)
-	t.Len(t.attachedProgramNames(), 0)
+	t.assertClean()
 }
 
 func TestAppUnload_StatefulWithBPF(tt *testing.T) {
 	tt.Parallel()
 	t := newStatefulAppTest(tt)
-	t.state.bpfDirExists = true
+	t.state.fs[trimRoot(internal.BPFDir)] = &fstest.MapFile{Mode: os.ModeDir | internal.BPFMode}
 	for _, att := range internal.CgroupAttaches() {
 		t.state.attached[att.Name] = struct{}{}
 	}
 
 	t.Nil(t.App.Unload())
-	t.False(t.state.bpfDirExists)
-	t.Len(t.attachedProgramNames(), 0)
+	t.assertClean()
 }
 
 func TestAppUnload_StatefulBPFDirExists(tt *testing.T) {
 	tt.Parallel()
 	t := newStatefulAppTest(tt)
-	t.state.bpfDirExists = true
-	t.state.removeAllErr = errWorldRemove
+	t.state.fs[trimRoot(internal.BPFDir)] = &fstest.MapFile{Mode: os.ModeDir | internal.BPFMode}
+	t.faults.removeAll = errWorldRemove
 
 	err := t.App.Unload()
 	t.Match(err, "BPF pin directory still exists")
@@ -473,7 +484,7 @@ func TestAppUnload_StatefulBPFDirExists(tt *testing.T) {
 func TestAppUnload_StatefulBPFDirStatError(tt *testing.T) {
 	tt.Parallel()
 	t := newStatefulAppTest(tt)
-	t.state.statErr = errWorldStat
+	t.faults.stat = errWorldStat
 
 	err := t.App.Unload()
 	t.Match(err, "stat BPF pin dir")
@@ -483,7 +494,7 @@ func TestAppUnload_StatefulBPFDirStatError(tt *testing.T) {
 func TestAppUnload_StatefulCgroupShowError(tt *testing.T) {
 	tt.Parallel()
 	t := newStatefulAppTest(tt)
-	t.state.cgroupShowErr = errWorldBpftool
+	t.faults.cgroupShow = errWorldBpftool
 
 	err := t.App.Unload()
 	t.Match(err, "cannot verify cgroup attachments")
@@ -494,41 +505,37 @@ func TestAppUnload_StatefulCgroupShowExitCode2(tt *testing.T) {
 	t := newStatefulAppTest(tt)
 
 	cmd := exec.Command("sh", "-c", "exit 2") //nolint:noctx // Trivial, exits immediately.
-	t.state.cgroupShowErr = cmd.Run()
+	t.faults.cgroupShow = cmd.Run()
 
 	t.Nil(t.App.Unload())
-	t.False(t.state.bpfDirExists)
-	t.Len(t.attachedProgramNames(), 0)
+	t.assertClean()
 }
 
 func TestAppUnload_StatefulInvalidJSON(tt *testing.T) {
 	tt.Parallel()
 	t := newStatefulAppTest(tt)
-	t.state.cgroupShowRaw = []byte("{")
+	t.faults.cgroupShowRaw = []byte("{")
 
 	t.Nil(t.App.Unload())
-	t.False(t.state.bpfDirExists)
-	t.Len(t.attachedProgramNames(), 0)
+	t.assertClean()
 }
 
 func TestAppUnload_StatefulCgroupShowNoOutput(tt *testing.T) {
 	tt.Parallel()
 	t := newStatefulAppTest(tt)
-	t.state.cgroupShowRaw = []byte{}
+	t.faults.cgroupShowRaw = []byte{}
 
 	t.Nil(t.App.Unload())
-	t.False(t.state.bpfDirExists)
-	t.Len(t.attachedProgramNames(), 0)
+	t.assertClean()
 }
 
 func TestAppUnload_StatefulCgroupShowBracketOnly(tt *testing.T) {
 	tt.Parallel()
 	t := newStatefulAppTest(tt)
-	t.state.cgroupShowRaw = []byte("[")
+	t.faults.cgroupShowRaw = []byte("[")
 
 	t.Nil(t.App.Unload())
-	t.False(t.state.bpfDirExists)
-	t.Len(t.attachedProgramNames(), 0)
+	t.assertClean()
 }
 
 func TestAppSetMark_StatefulDoFailures(tt *testing.T) {
@@ -543,13 +550,15 @@ func TestAppSetMark_StatefulSuccess(tt *testing.T) {
 
 	t.Nil(t.App.SetMark(mark))
 	t.DeepEqual(t.state.markBytes, mark.ToLE())
+	t.assertClean()
 }
 
 func TestAppSetMark_StatefulError(tt *testing.T) {
 	tt.Parallel()
 	t := newStatefulAppTest(tt)
-	t.state.mapUpdateErr = errWorldBpftool
+	t.faults.mapUpdate = errWorldBpftool
 
 	err := t.App.SetMark(internal.Mark(0x10000000))
 	t.Match(err, "bpftool map update")
+	t.assertClean()
 }
