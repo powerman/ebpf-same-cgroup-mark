@@ -55,7 +55,7 @@ jobs:
         run: sudo dmesg --clear
 
       - name: Integration test
-        run: timeout 30 sudo -E bash .github/integration_test.sh
+        run: timeout 30 sudo -E $(which mise) exec -- bash .github/integration_test.sh
 
       - name: Show relevant kernel messages
         if: always()
@@ -97,7 +97,7 @@ jobs:
         run: sudo dmesg --clear
 
       - name: Integration test
-        run: timeout 30 sudo -E mise exec -- bash .github/integration_test.sh
+        run: timeout 30 sudo -E bash .github/integration_test.sh
 
       - name: Show relevant kernel messages
         if: always()
