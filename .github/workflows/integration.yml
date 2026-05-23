@@ -32,8 +32,10 @@ jobs:
           # /usr/lib/linux-tools-$(uname -r)/bpftool, which may not exist
           # when the running kernel version differs from the installed
           # linux-tools-azure package. Create a direct symlink as fallback.
-          bpftool=$(find /usr/lib -maxdepth 2 -type f -name bpftool -path '*/linux-tools-*' 2>/dev/null | head -1)
-          [ -n "$bpftool" ] && sudo ln -fs "$bpftool" /usr/local/bin/bpftool
+          bpftool="$(find /usr/lib -maxdepth 3 -type f -name bpftool -path '*/linux-tools-*' 2>/dev/null | head -1)"
+          if [ -n "$bpftool" ]; then
+            sudo ln -fs "$bpftool" /usr/local/bin/bpftool
+          fi
 
       - uses: jdx/mise-action@v4
       - run: git reset --hard # Work around https://github.com/jdx/mise/discussions/8270.
