@@ -76,10 +76,10 @@ func (dummyFileInfo) IsDir() bool        { return true }
 func (dummyFileInfo) Sys() any           { return nil }
 
 func cgroupShowJSONWorld(names ...string) []byte {
-	entries := make([]main.CgroupAttachEntry, 0, len(names))
+	entries := make([]main.CgroupAttach, 0, len(names))
 	for _, name := range names {
-		for _, att := range main.CgroupAttach() {
-			if att.ProgName == name {
+		for _, att := range main.CgroupAttaches() {
+			if att.Name == name {
 				entries = append(entries, att)
 				break
 			}
@@ -373,8 +373,8 @@ func TestAppLoad_StatefulLoadallError(tt *testing.T) {
 func TestAppLoad_StatefulAttachErrorRollsBack(tt *testing.T) {
 	tt.Parallel()
 	t := newStatefulAppTest(tt)
-	entries := main.CgroupAttach()
-	t.state.attachErr[entries[len(entries)-1].ProgName] = errWorldAttach
+	entries := main.CgroupAttaches()
+	t.state.attachErr[entries[len(entries)-1].Name] = errWorldAttach
 
 	err := t.App.Load()
 	t.Match(err, "bpftool attach")
@@ -433,8 +433,8 @@ func TestAppUnload_StatefulWithBPF(tt *testing.T) {
 	tt.Parallel()
 	t := newStatefulAppTest(tt)
 	t.state.bpfDirExists = true
-	for _, att := range main.CgroupAttach() {
-		t.state.attached[att.ProgName] = struct{}{}
+	for _, att := range main.CgroupAttaches() {
+		t.state.attached[att.Name] = struct{}{}
 	}
 
 	t.Nil(t.App.Unload())

@@ -32,15 +32,15 @@ var (
 	errProgAttached = errors.New("BPF program still attached to cgroup")
 )
 
-// CgroupAttachEntry represents a single eBPF program and its corresponding cgroup attach type.
-type CgroupAttachEntry struct {
-	ProgName   string `json:"name"`
+// CgroupAttach represents a single eBPF program and its corresponding cgroup attach type.
+type CgroupAttach struct {
+	Name       string `json:"name"`
 	AttachType string `json:"attach_type"`
 }
 
-// CgroupAttach returns the list of eBPF programs and their corresponding cgroup attach types.
-func CgroupAttach() []CgroupAttachEntry {
-	return []CgroupAttachEntry{
+// CgroupAttaches returns the list of eBPF programs and their corresponding cgroup attach types.
+func CgroupAttaches() []CgroupAttach {
+	return []CgroupAttach{
 		{"same_cgroup_bind4", "cgroup_inet4_bind"},
 		{"same_cgroup_bind6", "cgroup_inet6_bind"},
 		{"same_cgroup_connect4", "cgroup_inet4_connect"},
@@ -92,11 +92,11 @@ func (a *app) load() (err error) {
 		return fmt.Errorf("bpftool loadall: %w", err)
 	}
 
-	for _, att := range CgroupAttach() {
-		progPin := filepath.Join(BPFDir, att.ProgName)
+	for _, att := range CgroupAttaches() {
+		progPin := filepath.Join(BPFDir, att.Name)
 		err = a.bpftoolAttach(att.AttachType, progPin)
 		if err != nil {
-			return fmt.Errorf("bpftool attach %s %s: %w", att.AttachType, att.ProgName, err)
+			return fmt.Errorf("bpftool attach %s %s: %w", att.AttachType, att.Name, err)
 		}
 	}
 
@@ -122,8 +122,8 @@ func (a *app) Unload() error {
 }
 
 func (a *app) unload() error {
-	for _, att := range CgroupAttach() {
-		progPin := filepath.Join(BPFDir, att.ProgName)
+	for _, att := range CgroupAttaches() {
+		progPin := filepath.Join(BPFDir, att.Name)
 		_ = a.bpftoolDetach(att.AttachType, progPin)
 	}
 	_ = a.OsRemoveAll(BPFDir)
@@ -207,9 +207,9 @@ func (a *app) checkUnloaded() error {
 	if err != nil {
 		errs = errors.Join(errs, fmt.Errorf("cannot verify cgroup attachments: %w", err))
 	} else {
-		for _, att := range CgroupAttach() {
+		for _, att := range CgroupAttaches() {
 			if slices.Contains(attaches, att) {
-				errs = errors.Join(errs, fmt.Errorf("%w: %s", errProgAttached, att.ProgName))
+				errs = errors.Join(errs, fmt.Errorf("%w: %s", errProgAttached, att.Name))
 			}
 		}
 	}
@@ -252,12 +252,12 @@ func (a *app) bpftoolMapUpdateMark(m Mark) error {
 	).Run()
 }
 
-func (a *app) bpftoolCgroupShow() ([]CgroupAttachEntry, error) {
+func (a *app) bpftoolCgroupShow() ([]CgroupAttach, error) {
 	out, err := a.ExecCommand("bpftool", "--json", "cgroup", "show", CgroupRoot).Output()
 	if err != nil {
 		return nil, err
 	}
-	var attaches []CgroupAttachEntry
+	var attaches []CgroupAttach
 	err = json.Unmarshal(out, &attaches)
 	if err != nil {
 		return nil, fmt.Errorf("parse bpftool cgroup: %w", err)
