@@ -256,6 +256,9 @@ func (a *app) bpftoolMapUpdateMark(m Mark) error {
 func (a *app) bpftoolCgroupShow() ([]CgroupAttach, error) {
 	out, err := a.ExecCommand("bpftool", "--json", "cgroup", "show", CgroupRoot).Output()
 	if err != nil {
+		// Ubuntu's linux-tools wrapper exits with code 2 when no programs
+		// are attached (the real bpftool returns empty stdout, exit 0).
+		// Both mean the same — nothing to list.
 		if err, ok := errors.AsType[*exec.ExitError](err); ok && err.ExitCode() == 2 { //nolint:noinlineerr // False positive.
 			return nil, nil
 		}
@@ -264,9 +267,11 @@ func (a *app) bpftoolCgroupShow() ([]CgroupAttach, error) {
 	var attaches []CgroupAttach
 	err = json.Unmarshal(out, &attaches)
 	if err != nil {
-		// bpftool from libbpf can output incomplete JSON when no
-		// cgroup programs are attached. Since we already detached
-		// everything, treat parse errors as no programs.
+		// During ~mid 2024 to early 2025 the libbpf-backed bpftool had
+		// a bug: "bpftool --json cgroup show" output just "[" (no "]")
+		// when no programs were attached. Also, exit 0 + empty stdout
+		// means the same. Since we already detached, treat any parse
+		// failure as "no attachments".
 		return nil, nil //nolint:nilerr // JSON parse errors from bpftool are benign
 	}
 	return attaches, nil
