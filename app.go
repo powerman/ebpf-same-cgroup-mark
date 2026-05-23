@@ -266,6 +266,9 @@ func (a *app) bpftoolCgroupShow() ([]CgroupAttachEntry, error) {
 		}
 		return nil, err
 	}
+	if len(out) == 0 {
+		return nil, nil
+	}
 	var attaches []CgroupAttachEntry
 	err = json.Unmarshal(out, &attaches)
 	if err != nil {

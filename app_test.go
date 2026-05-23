@@ -517,6 +517,27 @@ func TestAppUnload_CheckUnloadedCgroupShowExitCode2(tt *testing.T) {
 	t.Nil(err)
 }
 
+func TestAppUnload_CheckUnloadedCgroupShowEmptyOutput(tt *testing.T) {
+	tt.Parallel()
+	t := newTestApp(tt)
+
+	t.ExpectRootCheckSuccess()
+	t.ExpectMounted()
+	for _, att := range main.CgroupAttach() {
+		t.ExpectCmdRun("bpftool", "cgroup", "detach",
+			main.CgroupRoot, att.AttachType, "pinned", filepath.Join(main.BPFDir, att.ProgName),
+		).Return(errMockRemove)
+	}
+	t.Expect.OsRemoveAll(main.BPFDir).Return(nil)
+	// checkUnloaded: BPF pin directory cleaned.
+	t.Expect.OsStat(main.BPFDir).Return(nil, os.ErrNotExist)
+	// checkUnloaded: bpftool cgroup show returns empty output (no programs).
+	t.ExpectCmdStdout("bpftool", "--json", "cgroup", "show", main.CgroupRoot).Return([]byte{}, nil)
+
+	err := t.App.Unload()
+	t.Nil(err)
+}
+
 func TestAppUnload_CheckUnloadedCgroupShowJSONError(tt *testing.T) {
 	tt.Parallel()
 	t := newTestApp(tt)

@@ -481,6 +481,16 @@ func TestAppUnload_StatefulMalformedJSON(tt *testing.T) {
 	t.Match(err, "parse bpftool cgroup")
 }
 
+func TestAppUnload_StatefulCgroupShowNoOutput(tt *testing.T) {
+	tt.Parallel()
+	t := newStatefulAppTest(tt)
+	t.state.cgroupShowRaw = []byte{}
+
+	t.Nil(t.App.Unload())
+	t.False(t.state.bpfDirExists)
+	t.Len(t.attachedProgramNames(), 0)
+}
+
 func TestAppSetMark_StatefulDoFailures(tt *testing.T) {
 	tt.Parallel()
 	runDoFailures(tt, func(t *statefulAppTest) error { return t.App.SetMark(main.Mark(0x10000000)) })
