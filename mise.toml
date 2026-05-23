@@ -23,7 +23,7 @@ golangci-lint = 'latest'
 # 'go test' runner with output optimized for humans.
 gotestsum = 'latest'
 # Tool for inspection and simple manipulation of eBPF programs and maps.
-'github:libbpf/bpftool' = 'latest'
+'github:libbpf/bpftool' = { version = 'latest', bin = 'bpftool' }
 
 #--- Release
 # A highly customizable Changelog Generator that follows Conventional Commit specifications.
