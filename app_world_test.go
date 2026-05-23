@@ -21,7 +21,6 @@ var (
 	errWorldAttach      = errors.New("world attach error")
 	errWorldBpftool     = errors.New("world bpftool error")
 	errWorldClose       = errors.New("world close error")
-	errWorldCreateTemp  = errors.New("world create temp error")
 	errWorldLoadall     = errors.New("world loadall error")
 	errWorldMkdir       = errors.New("world mkdir error")
 	errWorldMountFailed = errors.New("world mount failed error")
@@ -68,7 +67,7 @@ type statefulAppTest struct {
 
 type dummyFileInfo struct{}
 
-func (dummyFileInfo) Name() string       { return main.BPFDir }
+func (dummyFileInfo) Name() string       { return "" }
 func (dummyFileInfo) Size() int64        { return 0 }
 func (dummyFileInfo) Mode() os.FileMode  { return 0o750 }
 func (dummyFileInfo) ModTime() time.Time { return time.Time{} }
@@ -198,7 +197,6 @@ func (m *mockWorld) ExecCommand(name string, args ...string) main.WorldExecCmd {
 		args[0] == "cgroup" && args[1] == "attach":
 		return &worldCmdMock{
 			runFn: func() error {
-				attachType := args[3]
 				progName := filepath.Base(args[5])
 				err := m.state.attachErr[progName]
 				if err != nil {
@@ -206,7 +204,6 @@ func (m *mockWorld) ExecCommand(name string, args ...string) main.WorldExecCmd {
 				}
 				m.state.bpfDirExists = true
 				m.state.attached[progName] = struct{}{}
-				_ = attachType
 				return nil
 			},
 		}
@@ -215,14 +212,12 @@ func (m *mockWorld) ExecCommand(name string, args ...string) main.WorldExecCmd {
 		args[0] == "cgroup" && args[1] == "detach":
 		return &worldCmdMock{
 			runFn: func() error {
-				attachType := args[3]
 				progName := filepath.Base(args[5])
 				err := m.state.detachErr[progName]
 				if err != nil {
 					return err
 				}
 				delete(m.state.attached, progName)
-				_ = attachType
 				return nil
 			},
 		}
@@ -307,6 +302,20 @@ func (t *statefulAppTest) attachedProgramNames() []string {
 	return result
 }
 
+func (t *statefulAppTest) assertClean() {
+	t.Len(t.attachedProgramNames(), 0)
+	t.False(t.state.bpfDirExists)
+	t.Len(t.state.tempFiles, 0)
+}
+
+func (t *statefulAppTest) assertAttachedAll() {
+	expected := make([]string, 0, len(main.CgroupAttaches()))
+	for _, att := range main.CgroupAttaches() {
+		expected = append(expected, att.Name)
+	}
+	t.DeepEqual(t.attachedProgramNames(), expected)
+}
+
 func runDoFailures(tt *testing.T, call func(t *statefulAppTest) error) {
 	tt.Helper()
 
@@ -340,39 +349,29 @@ func TestAppLoad_StatefulDoFailures(tt *testing.T) {
 	runDoFailures(tt, func(t *statefulAppTest) error { return t.App.Load() })
 }
 
-func TestAppLoad_StatefulWriteTempCreateError(tt *testing.T) {
+func TestAppLoad_StatefulWriteTempErrors(tt *testing.T) {
 	tt.Parallel()
-	t := newStatefulAppTest(tt)
-	t.state.createTempErr = errWorldCreateTemp
 
-	err := t.App.Load()
-	t.Match(err, "create temp file")
-	t.Len(t.attachedProgramNames(), 0)
-	t.False(t.state.bpfDirExists)
-}
+	tests := []struct {
+		name     string
+		setup    func(t *statefulAppTest)
+		errMatch string
+	}{
+		{name: "CreateError", setup: func(t *statefulAppTest) { t.state.createTempErr = errWorldMkdir }, errMatch: "create temp file"},
+		{name: "WriteError", setup: func(t *statefulAppTest) { t.state.tempWriteErr = errWorldWrite }, errMatch: "write temp file"},
+		{name: "CloseError", setup: func(t *statefulAppTest) { t.state.tempCloseErr = errWorldClose }, errMatch: "close temp file"},
+	}
 
-func TestAppLoad_StatefulWriteTempWriteError(tt *testing.T) {
-	tt.Parallel()
-	t := newStatefulAppTest(tt)
-	t.state.tempWriteErr = errWorldWrite
-
-	err := t.App.Load()
-	t.Match(err, "write temp file")
-	t.Len(t.attachedProgramNames(), 0)
-	t.False(t.state.bpfDirExists)
-	t.Len(t.state.tempFiles, 0)
-}
-
-func TestAppLoad_StatefulWriteTempCloseError(tt *testing.T) {
-	tt.Parallel()
-	t := newStatefulAppTest(tt)
-	t.state.tempCloseErr = errWorldClose
-
-	err := t.App.Load()
-	t.Match(err, "close temp file")
-	t.Len(t.attachedProgramNames(), 0)
-	t.False(t.state.bpfDirExists)
-	t.Len(t.state.tempFiles, 0)
+	for _, tc := range tests {
+		tt.Run(tc.name, func(tt *testing.T) {
+			tt.Parallel()
+			t := newStatefulAppTest(tt)
+			tc.setup(t)
+			err := t.App.Load()
+			t.Match(err, tc.errMatch)
+			t.assertClean()
+		})
+	}
 }
 
 func TestAppLoad_StatefulCleanupPreviousStateError(tt *testing.T) {
@@ -394,10 +393,8 @@ func TestAppLoad_StatefulLoadallError(tt *testing.T) {
 
 	err := t.App.Load()
 	t.Match(err, "bpftool loadall")
-	t.Len(t.attachedProgramNames(), 0)
-	t.False(t.state.bpfDirExists)
 	// The temp object is cleaned up by deferred OsRemove.
-	t.Len(t.state.tempFiles, 0)
+	t.assertClean()
 }
 
 func TestAppLoad_StatefulAttachErrorRollsBack(tt *testing.T) {
@@ -408,9 +405,7 @@ func TestAppLoad_StatefulAttachErrorRollsBack(tt *testing.T) {
 
 	err := t.App.Load()
 	t.Match(err, "bpftool attach")
-	t.Len(t.attachedProgramNames(), 0)
-	t.False(t.state.bpfDirExists)
-	t.Len(t.state.tempFiles, 0)
+	t.assertClean()
 }
 
 func TestAppLoad_StatefulSuccessMounted(tt *testing.T) {
@@ -420,12 +415,7 @@ func TestAppLoad_StatefulSuccessMounted(tt *testing.T) {
 	t.Nil(t.App.Load())
 	t.True(t.state.mounted)
 	t.True(t.state.bpfDirExists)
-	t.DeepEqual(t.attachedProgramNames(), []string{
-		"same_cgroup_bind4",
-		"same_cgroup_bind6",
-		"same_cgroup_connect4",
-		"same_cgroup_connect6",
-	})
+	t.assertAttachedAll()
 	t.Len(t.state.tempFiles, 0)
 }
 
@@ -437,12 +427,7 @@ func TestAppLoad_StatefulSuccessMountFresh(tt *testing.T) {
 	t.Nil(t.App.Load())
 	t.True(t.state.mounted)
 	t.True(t.state.bpfDirExists)
-	t.DeepEqual(t.attachedProgramNames(), []string{
-		"same_cgroup_bind4",
-		"same_cgroup_bind6",
-		"same_cgroup_connect4",
-		"same_cgroup_connect6",
-	})
+	t.assertAttachedAll()
 }
 
 func TestAppUnload_StatefulDoFailures(tt *testing.T) {
