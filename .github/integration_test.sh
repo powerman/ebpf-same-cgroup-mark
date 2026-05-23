@@ -10,6 +10,8 @@ MARK=0x80000000
 PORT_SAME=18080
 PORT_OTHER=18081
 
+info() { echo "[$(date '+%H:%M:%S')] $*" >&2; }
+
 socat_listen() {
 	socat "TCP-LISTEN:$1,bind=127.0.0.1,reuseaddr" \
 		OPEN:/dev/null,trunc &
@@ -42,9 +44,11 @@ rule_packets() {
 }
 
 # Setup cgroup hierarchy.
+info "setting up cgroup hierarchy"
 mkdir -p "$CGROUP_ROOT/same" "$OTHER_CGROUP"
 
 # Pre-check: verify basic TCP works before loading BPF.
+info "pre-check: verifying basic TCP works before loading BPF"
 socat_listen 18082
 PRE_CHECK_PID=$!
 wait_port 18082 "$PRE_CHECK_PID"
@@ -52,6 +56,7 @@ socat_connect 18082
 wait "$PRE_CHECK_PID" 2>/dev/null || true
 
 # nftables rules to catch marked packets.
+info "configuring nftables rules"
 nft add table inet "$TABLE"
 nft add chain inet "$TABLE" output \
 	'{ type filter hook output priority 0; policy accept; }'
@@ -61,9 +66,11 @@ nft add rule inet "$TABLE" output \
 	tcp dport "$PORT_OTHER" meta mark \& "$MARK" == "$MARK" counter
 
 # Load BPF program.
+info "loading BPF program"
 "$BINARY" load -m "$MARK"
 
 # Positive test: same cgroup connection gets marked.
+info "positive test: same-cgroup connection on port $PORT_SAME"
 socat_listen "$PORT_SAME"
 PID_POS=$!
 wait_port "$PORT_SAME" "$PID_POS"
@@ -72,8 +79,10 @@ wait "$PID_POS"
 
 POSITIVE_PACKETS="$(rule_packets "$PORT_SAME")"
 test "${POSITIVE_PACKETS:-0}" -gt 0
+info "positive test: OK (${POSITIVE_PACKETS} marked packets)"
 
 # Negative test: cross-cgroup connection is NOT marked.
+info "negative test: cross-cgroup connection on port $PORT_OTHER"
 socat_listen "$PORT_OTHER"
 PID_NEG=$!
 wait_port "$PORT_OTHER" "$PID_NEG"
@@ -86,3 +95,4 @@ wait "$PID_NEG"
 
 NEGATIVE_PACKETS="$(rule_packets "$PORT_OTHER")"
 test "${NEGATIVE_PACKETS:-0}" -eq 0
+info "negative test: OK (0 marked packets)"
