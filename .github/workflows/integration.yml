@@ -68,7 +68,8 @@ jobs:
 
           start_listener() {
             local port="$1"
-            timeout 10 nc -l 127.0.0.1 "$port" >/dev/null &
+            # Run with sudo — eBPF cgroup hooks may interfere with plain nc.
+            sudo timeout 10 nc -l 127.0.0.1 "$port" >/dev/null &
             LISTENER_PID=$!
           }
 
@@ -86,7 +87,7 @@ jobs:
           # connect to listener from the same cgroup (no explicit cgroup move).
           run_client_same() {
             local port="$1"
-            printf 'ping\n' | timeout 10 nc 127.0.0.1 "$port" >/dev/null
+            printf 'ping\n' | sudo timeout 10 nc 127.0.0.1 "$port" >/dev/null
           }
 
           # connect to listener from a different cgroup.
