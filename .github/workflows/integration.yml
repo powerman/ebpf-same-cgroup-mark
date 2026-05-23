@@ -68,8 +68,9 @@ jobs:
 
           start_listener() {
             local port="$1"
-            # Run with sudo — eBPF cgroup hooks may interfere with plain nc.
-            sudo timeout 10 nc -l 127.0.0.1 "$port" >/dev/null &
+            # Redirect stdin from /dev/null so nc -l doesn't read from the
+            # runner's pipe (which may cause unexpected behavior).
+            sudo timeout 10 nc -l 127.0.0.1 "$port" </dev/null >/dev/null 2>/tmp/nc.stderr &
             LISTENER_PID=$!
           }
 
@@ -87,7 +88,14 @@ jobs:
           # connect to listener from the same cgroup (no explicit cgroup move).
           run_client_same() {
             local port="$1"
-            printf 'ping\n' | sudo timeout 10 nc 127.0.0.1 "$port" >/dev/null
+            # Try to connect using bash /dev/tcp first for diagnostics.
+            if timeout 3 bash -c "echo ping > /dev/tcp/127.0.0.1/$port" 2>/tmp/bash_tcp.stderr; then
+              echo "PROGRESS: /dev/tcp OK"
+            else
+              echo "PROGRESS: /dev/tcp FAIL rc=$?" >&2
+              cat /tmp/bash_tcp.stderr >&2 || true
+            fi
+            printf 'ping\n' | sudo timeout 10 nc -v 127.0.0.1 "$port" >/dev/null 2>&1
           }
 
           # connect to listener from a different cgroup.
@@ -111,6 +119,19 @@ jobs:
           sudo mkdir -p "$SAME_CGROUP" "$OTHER_CGROUP"
           echo "PROGRESS: cgroups created"
 
+          # Sanity check: basic networking works before loading BPF.
+          timeout 5 nc -l 127.0.0.1 18082 </dev/null >/dev/null &
+          PRE_CHECK_PID=$!
+          sleep 0.5
+          printf 'x\n' | timeout 3 nc -w 3 127.0.0.1 18082 >/dev/null 2>&1
+          PRE_CHECK_RC=$?
+          wait "$PRE_CHECK_PID" 2>/dev/null || true
+          echo "PROGRESS: pre-check rc=$PRE_CHECK_RC"
+          if [ "$PRE_CHECK_RC" -ne 0 ]; then
+            echo "FATAL: basic networking broken before BPF load" >&2
+            exit 1
+          fi
+
           sudo nft -f - <<EOF
           table inet $TABLE {
             chain $CHAIN {
@@ -129,8 +150,12 @@ jobs:
           start_listener "$PORT_SAME"
           wait_listener "$PORT_SAME"
           echo "PROGRESS: listener ready, running client"
-          run_client_same "$PORT_SAME"
-          wait "$LISTENER_PID"
+          echo "PROGRESS: client stderr follows:"
+          run_client_same "$PORT_SAME" 2>/tmp/client.stderr; echo "PROGRESS: client_exit=$?"
+          cat /tmp/client.stderr 2>/dev/null || true
+          # Dump listener stderr.
+          cat /tmp/nc.stderr 2>/dev/null || true
+          wait "$LISTENER_PID"; echo "PROGRESS: listener wait exit=$?"
           echo "PROGRESS: positive test client done"
 
           POSITIVE_PACKETS="$(rule_packets "$PORT_SAME")"
