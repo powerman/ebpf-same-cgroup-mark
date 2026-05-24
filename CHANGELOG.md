@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-05-24
+
+### 🔔 Changed
+
+- Protect against supply chain attack on test deps by @powerman in [c8673a0]
+
+### 🐛 Fixed
+
+- **(app)** Distinguish three OsStat outcomes in checkUnloaded by @powerman in [565bcf9]
+- Parsing invalid --mark by @powerman in [b7eeae0]
+- Rollback load -m on mark update failure by @powerman in [696aa03]
+
+### 📚 Documentation
+
+- **(README)** Improved by @powerman in [ebe837f]
+
+[0.3.0]: https://github.com/powerman/ebpf-same-cgroup-mark/compare/v0.2.0..v0.3.0
+[b7eeae0]: https://github.com/powerman/ebpf-same-cgroup-mark/commit/b7eeae0d85e0e1b9ba47897e3869f3332052ecc1
+[696aa03]: https://github.com/powerman/ebpf-same-cgroup-mark/commit/696aa03af75f93a922330eb410e14f6a7619f8a9
+[565bcf9]: https://github.com/powerman/ebpf-same-cgroup-mark/commit/565bcf9c9f89ff626384433f5b34673e6b1e9f26
+[ebe837f]: https://github.com/powerman/ebpf-same-cgroup-mark/commit/ebe837f052a3ee923054f0a4219abde46759575f
+[c8673a0]: https://github.com/powerman/ebpf-same-cgroup-mark/commit/c8673a0df94a7d334d6283e3d350953017e4574f
+
 ## [0.2.0] - 2026-05-22
 
 ### 🔔 Changed
