@@ -137,15 +137,23 @@ NOTE: The above example does not mean you should break into very short lines as 
   use shortcut methods when available instead of `t.True(complex expression)`
   (e.g. `t.Nil(err)`, `t.Match(err, "substr")`, `t.Len(res)`, etc.
 - Extensively use test helpers to reduce code duplication within and between tests.
-- Generate mocks with `go.uber.org/mock/mockgen` using `//go:generate` in a file with interface:
+- Use [gomock](https://go.uber.org/mock/mockgen) by default for interaction-based tests,
+  where the assertions are about exact calls, arguments, call counts, matchers, or ordering:
 
   ```text
   //go:generate mise run mockgen
   ```
 
-- Use `go.uber.org/mock/gomock` for expectations:
-  `ctrl := gomock.NewController(t)`,
-  `mock.EXPECT().Method(args).Return(...)`.
+- Use [go-mockgen](https://github.com/unknwon/go-mockgen) for stateful fakes,
+  when tests are clearer as world-state transitions than as long EXPECT() chains,
+  especially when a dependency needs default behavior plus queued per-call overrides
+  and optional post-hoc inspection of call history.
+  List interface names explicitly with `-i` in `//go:generate`,
+  because stateful mocks are expected to be relatively rare.
+
+  ```text
+  //go:generate mise run go-mockgen -i Интерфейс1 -i …
+  ```
 
 ### Gotchas
 

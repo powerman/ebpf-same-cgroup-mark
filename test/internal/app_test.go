@@ -1,566 +1,496 @@
 package internal_test
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
+	"testing/fstest"
 
+	"github.com/gobwas/glob"
 	"github.com/powerman/check"
-	"go.uber.org/mock/gomock"
 
 	"github.com/powerman/ebpf-same-cgroup-mark/internal"
 )
 
-// Package-level sentinel errors for mocks (err113 requires static errors).
-var (
-	testBPFObj = []byte("test-bpf-object")
+var BPFDir = trimRoot(internal.BPFDir)
 
-	errMockAttach      = errors.New("mock attach error")
-	errMockBpftool     = errors.New("mock bpftool error")
-	errMockLoadall     = errors.New("mock loadall error")
-	errMockMkdir       = errors.New("mock mkdir error")
-	errMockMountFailed = errors.New("mock mount failed error")
-	errMockNotMounted  = errors.New("mock not mounted error")
-	errMockRemove      = errors.New("mock remove error")
-	errMockStat        = errors.New("mock stat error")
+var (
+	errAttach      = errors.New("stub attach error")
+	errBpftool     = errors.New("stub bpftool error")
+	errClose       = errors.New("stub close error")
+	errLoadall     = errors.New("stub loadall error")
+	errMkdir       = errors.New("stub mkdir error")
+	errMountFailed = errors.New("stub mount failed error")
+	errNotMount    = errors.New("stub not mounted error")
+	errRemove      = errors.New("stub remove error")
+	errStat        = errors.New("stub stat error")
+	errWrite       = errors.New("stub write error")
 )
 
-type testApp struct {
-	*check.C
+// trimRoot strips the leading "/" from absolute paths
+// so they can be used as keys in fstest.MapFS.
+func trimRoot(p string) string { return strings.TrimLeft(p, "/") }
 
-	Ctrl      *gomock.Controller
-	MockWorld *MockWorld
-	Expect    *MockWorldMockRecorder
-	App       internal.App
+// ExecCmd implements internal.WorldExecCmd.
+type ExecCmd struct {
+	run            func() error
+	combinedOutput func() ([]byte, error)
+	output         func() ([]byte, error)
 }
 
-func newTestApp(tt *testing.T) *testApp {
+func (c *ExecCmd) Run() error {
+	if c.run == nil {
+		panic("unexpected call to Run()")
+	}
+	return c.run()
+}
+
+func (c *ExecCmd) CombinedOutput() ([]byte, error) {
+	if c.combinedOutput == nil {
+		panic("unexpected call to CombinedOutput()")
+	}
+	return c.combinedOutput()
+}
+
+func (c *ExecCmd) Output() ([]byte, error) {
+	if c.output == nil {
+		panic("unexpected call to Output()")
+	}
+	return c.output()
+}
+
+// OsFile implements internal.WorldOsFile.
+type OsFile struct {
+	name  string
+	write func([]byte) (int, error)
+	close func() error
+}
+
+func (f *OsFile) Name() string                { return f.name }
+func (f *OsFile) Write(p []byte) (int, error) { return f.write(p) }
+func (f *OsFile) Close() error                { return f.close() }
+
+// World implements internal.World with go-mockgen for command
+// and OS method dispatch.
+type World struct {
+	*MockStubWorld
+	Cmds *MockStubWorldCmds
+
+	euid      int
+	FS        fstest.MapFS
+	Mounted   bool
+	Attached  []internal.CgroupAttach
+	markBytes [4]string
+
+	nextID int
+}
+
+func newWorld() *World {
+	m := &World{
+		MockStubWorld: NewMockStubWorld(),
+		euid:          0,
+		Mounted:       true,
+		FS:            make(fstest.MapFS),
+	}
+	m.Cmds = NewMockStubWorldCmds()
+
+	m.Cmds.MountpointFunc.SetDefaultHook(func(dir string) error {
+		if m.Mounted {
+			return nil
+		}
+		return errNotMount
+	})
+
+	m.Cmds.MountBPFFunc.SetDefaultHook(func(fstype, target string) ([]byte, error) {
+		m.Mounted = true
+		return nil, nil
+	})
+
+	m.Cmds.BpftoolProgLoadAllFunc.SetDefaultHook(func(bpfObjPath, bpffs, mapsDir string) ([]byte, error) {
+		m.FS[BPFDir] = &fstest.MapFile{Mode: os.ModeDir | internal.BPFMode}
+		return nil, nil
+	})
+
+	m.Cmds.BpftoolCgroupAttachFunc.SetDefaultHook(func(cgroup, attachType, progPin string) error {
+		att := internal.CgroupAttach{Name: filepath.Base(progPin), AttachType: attachType}
+		m.Attached = append(m.Attached, att)
+		return nil
+	})
+
+	m.Cmds.BpftoolCgroupDetachFunc.SetDefaultHook(func(cgroup, attachType, progPin string) error {
+		att := internal.CgroupAttach{Name: filepath.Base(progPin), AttachType: attachType}
+		if i := slices.Index(m.Attached, att); i != -1 {
+			m.Attached = slices.Delete(m.Attached, i, i+1)
+		}
+		return nil
+	})
+
+	m.Cmds.BpftoolMapUpdateFunc.SetDefaultHook(func(args ...string) error {
+		last := len(args) - 4
+		m.markBytes = [4]string{args[last], args[last+1], args[last+2], args[last+3]}
+		return nil
+	})
+
+	m.Cmds.BpftoolCgroupShowFunc.SetDefaultHook(func(cgroup string) ([]byte, error) {
+		return json.Marshal(m.Attached)
+	})
+
+	m.OsCreateTempFunc.SetDefaultHook(func(dir, pattern string) (internal.WorldOsFile, error) {
+		path := fmt.Sprintf("tmp/stub-%d.bpf.o", m.nextID)
+		m.nextID++
+		m.FS[path] = &fstest.MapFile{Mode: 0o600}
+		return &OsFile{
+			name: path,
+			write: func(data []byte) (int, error) {
+				m.FS[path].Data = append(m.FS[path].Data, data...)
+				return len(data), nil
+			},
+			close: func() error { return nil },
+		}, nil
+	})
+
+	m.OsGeteuidFunc.SetDefaultHook(func() int {
+		return m.euid
+	})
+
+	m.OsMkdirAllFunc.SetDefaultHook(func(path string, perm os.FileMode) error {
+		m.FS[trimRoot(path)] = &fstest.MapFile{Mode: os.ModeDir | perm}
+		return nil
+	})
+
+	m.OsRemoveFunc.SetDefaultHook(func(name string) error {
+		delete(m.FS, trimRoot(name))
+		return nil
+	})
+
+	m.OsRemoveAllFunc.SetDefaultHook(func(path string) error {
+		paths, _ := fs.Glob(m.FS, trimRoot(path)+"/*")
+		for _, f := range append(paths, trimRoot(path)) {
+			delete(m.FS, f)
+		}
+		return nil
+	})
+
+	m.OsStatFunc.SetDefaultHook(func(name string) (os.FileInfo, error) {
+		return fs.Stat(m.FS, trimRoot(name))
+	})
+
+	return m
+}
+
+// ExecCommand dispatches to typed go-mockgen methods via command-line matching.
+// Each command's effect is deferred to the run/Output/CombinedOutput closure.
+func (m *World) ExecCommand(name string, args ...string) internal.WorldExecCmd {
+	cmdline := strings.Join(append([]string{name}, args...), " ")
+	switch {
+	case cmdline == "mountpoint -q /sys/fs/bpf":
+		return &ExecCmd{
+			run: func() error { return m.Cmds.Mountpoint(internal.BPFRoot) },
+		}
+
+	case cmdline == "mount -t bpf bpf /sys/fs/bpf":
+		return &ExecCmd{
+			combinedOutput: func() ([]byte, error) { return m.Cmds.MountBPF("bpf", internal.BPFRoot) },
+		}
+
+	case glob.MustCompile("bpftool prog loadall * "+internal.BPFDir+" pinmaps "+internal.BPFDir+"/maps", ' ').Match(cmdline):
+		return &ExecCmd{
+			combinedOutput: func() ([]byte, error) { return m.Cmds.BpftoolProgLoadAll(args[2], args[3], args[5]) },
+		}
+
+	case glob.MustCompile("bpftool cgroup attach /sys/fs/cgroup * pinned *", ' ').Match(cmdline):
+		return &ExecCmd{
+			run: func() error { return m.Cmds.BpftoolCgroupAttach(args[2], args[3], args[5]) },
+		}
+
+	case glob.MustCompile("bpftool cgroup detach /sys/fs/cgroup * pinned *", ' ').Match(cmdline):
+		return &ExecCmd{
+			run: func() error { return m.Cmds.BpftoolCgroupDetach(args[2], args[3], args[5]) },
+		}
+
+	case glob.MustCompile("bpftool map update pinned /sys/fs/bpf/same-cgroup-mark/maps/same_cgroup_mark_cfg key hex 00 00 00 00 value hex * * * *", ' ').Match(cmdline):
+		return &ExecCmd{
+			run: func() error { return m.Cmds.BpftoolMapUpdate(args...) },
+		}
+
+	case cmdline == "bpftool --json cgroup show /sys/fs/cgroup":
+		return &ExecCmd{
+			output: func() ([]byte, error) { return m.Cmds.BpftoolCgroupShow(internal.CgroupRoot) },
+		}
+
+	default:
+		panic(fmt.Sprintf("unexpected command: %s", cmdline))
+	}
+}
+
+type AppTest struct {
+	*check.C
+
+	World *World
+	App   internal.App
+}
+
+func newAppTest(tt *testing.T) *AppTest {
 	tt.Helper()
-	t := &testApp{C: check.T(tt).MustAll()}
-
-	t.Ctrl = gomock.NewController(t)
-	t.MockWorld = NewMockWorld(t.Ctrl)
-	t.Expect = t.MockWorld.EXPECT()
-	t.App = internal.NewApp(t.MockWorld, testBPFObj)
-
+	t := &AppTest{C: check.T(tt).MustAll()}
+	t.World = newWorld()
+	t.App = internal.NewApp(t.World, []byte("test-bpf-object"))
 	return t
 }
 
-func (t *testApp) ExpectRootCheckError() {
-	t.Expect.OsGeteuid().Return(1000)
-}
-
-func (t *testApp) ExpectRootCheckSuccess() {
-	t.Expect.OsGeteuid().Return(0)
-}
-
-func (t *testApp) ExpectEnsureBPFFSMounted() {
-	t.ExpectCmd("mountpoint", "-q", internal.BPFRoot).Run(nil)
-}
-
-func (t *testApp) ExpectEnsureBPFFSMkdirError() {
-	t.ExpectCmd("mountpoint", "-q", internal.BPFRoot).Run(errMockNotMounted)
-	t.Expect.OsMkdirAll(internal.BPFRoot, internal.BPFMode).Return(errMockMkdir)
-}
-
-func (t *testApp) ExpectEnsureBPFFSMountError() {
-	t.ExpectCmd("mountpoint", "-q", internal.BPFRoot).Run(errMockNotMounted)
-	t.Expect.OsMkdirAll(internal.BPFRoot, internal.BPFMode).Return(nil)
-	t.ExpectCmd("mount", "-t", "bpf", "bpf", internal.BPFRoot).CombinedOutput([]byte("mount failure details"), errMockMountFailed)
-}
-
-func (t *testApp) ExpectEnsureBPFFSMount() {
-	t.ExpectCmd("mountpoint", "-q", internal.BPFRoot).Run(errMockNotMounted)
-	t.Expect.OsMkdirAll(internal.BPFRoot, internal.BPFMode).Return(nil)
-	t.ExpectCmd("mount", "-t", "bpf", "bpf", internal.BPFRoot).CombinedOutput(nil, nil)
-}
-
-// ExpectLoadSuccess sets up successful Load-specific expectations (cleanup, temp file, loadall, attach).
-func (t *testApp) ExpectLoadSuccess() {
-	t.ExpectCleanup(errMockRemove)
-	t.ExpectTempFile()
-	t.ExpectCmd("bpftool", "prog", "loadall",
-		gomock.Any(), internal.BPFDir, "pinmaps", internal.BPFDir+"/maps",
-	).CombinedOutput(nil, nil)
-	for _, att := range internal.CgroupAttaches() {
-		t.ExpectCmd("bpftool", "cgroup", "attach",
-			internal.CgroupRoot, att.AttachType, "pinned", filepath.Join(internal.BPFDir, att.Name),
-		).Run(nil)
-	}
-}
-
-// ExpectUnloadSuccess sets up successful Unload-specific expectations (cleanup).
-func (t *testApp) ExpectUnloadSuccess() {
-	t.ExpectCleanup(errMockRemove)
-}
-
-// ExpectSetMarkSuccess sets up successful SetMark-specific expectations (bpftool map update).
-func (t *testApp) ExpectSetMarkSuccess() {
-	t.ExpectCmd("bpftool", "map", "update",
-		"pinned", internal.BPFDir+"/maps/same_cgroup_mark_cfg",
-		"key", "hex", "00", "00", "00", "00",
-		"value", "hex", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
-	).Run(nil)
-}
-
-type mockExecCmd struct {
-	t    *testApp
-	args []any
-	mock *MockWorldExecCmd
-}
-
-// ExpectCmd creates an expectation for ExecCommand(args...).
-func (t *testApp) ExpectCmd(args ...any) *mockExecCmd {
-	return &mockExecCmd{t: t, args: args, mock: NewMockWorldExecCmd(t.Ctrl)}
-}
-
-func (e *mockExecCmd) Run(err error) {
-	e.mock.EXPECT().Run().Return(err)
-	e.t.Expect.ExecCommand(e.args[0], e.args[1:]...).Return(e.mock)
-}
-
-func (e *mockExecCmd) Output(out []byte, err error) {
-	e.mock.EXPECT().Output().Return(out, err)
-	e.t.Expect.ExecCommand(e.args[0], e.args[1:]...).Return(e.mock)
-}
-
-func (e *mockExecCmd) CombinedOutput(out []byte, err error) {
-	e.mock.EXPECT().CombinedOutput().Return(out, err)
-	e.t.Expect.ExecCommand(e.args[0], e.args[1:]...).Return(e.mock)
-}
-
-// ExpectTempFile sets up successful temp file creation for testing file operations.
-func (t *testApp) ExpectTempFile() {
-	tf := NewMockWorldOsFile(t.Ctrl)
-	t.Expect.OsCreateTemp("", "same-cgroup-mark.*.bpf.o").Return(tf, nil)
-	tf.EXPECT().Write(testBPFObj).Return(len(testBPFObj), nil)
-	tf.EXPECT().Close().Return(nil)
-	tf.EXPECT().Name().Return("/tmp/test.bpf.o")
-	t.Expect.OsRemove("/tmp/test.bpf.o").Return(nil)
-}
-
-// ExpectMounted sets up successful ensureBPFFS (already mounted).
-func (t *testApp) ExpectMounted() {
-	t.ExpectCmd("mountpoint", "-q", internal.BPFRoot).Run(nil)
-}
-
-// ExpectCleanup sets up the private unload cleanup expectations.
-// detachErr controls whether detach returns error (clean state) or nil (BPF state present).
-// Does NOT include prepare/rootcheck — use when calling private unload directly.
-func (t *testApp) ExpectCleanup(detachErr error) {
-	for _, att := range internal.CgroupAttaches() {
-		t.ExpectCmd("bpftool", "cgroup", "detach",
-			internal.CgroupRoot, att.AttachType, "pinned", filepath.Join(internal.BPFDir, att.Name),
-		).Run(detachErr)
-	}
-	t.Expect.OsRemoveAll(internal.BPFDir).Return(nil)
-	t.Expect.OsStat(internal.BPFDir).Return(nil, os.ErrNotExist)
-	t.ExpectCmd("bpftool", "--json", "cgroup", "show", internal.CgroupRoot).Output([]byte("[]"), nil)
-}
-
-// ExpectTempFileError sets up expectations for a temp file operation
-// that fails at the given stage:
-//
-//	createErr != nil → OsCreateTemp fails, no file created
-//	writeErr  != nil → file created, Write fails
-//	closeErr  != nil → file created, Write succeeds, Close fails
-func (t *testApp) ExpectTempFileError(createErr, writeErr, closeErr error) {
-	if createErr != nil {
-		t.Expect.OsCreateTemp("", "same-cgroup-mark.*.bpf.o").Return(nil, createErr)
-		return
-	}
-	tf := NewMockWorldOsFile(t.Ctrl)
-	t.Expect.OsCreateTemp("", "same-cgroup-mark.*.bpf.o").Return(tf, nil)
-	writeResult := len(testBPFObj)
-	if writeErr != nil {
-		writeResult = 0
-	}
-	tf.EXPECT().Write(gomock.Any()).Return(writeResult, writeErr)
-	tf.EXPECT().Close().Return(closeErr)
-	tf.EXPECT().Name().Return("/tmp/test.bpf.o")
-	t.Expect.OsRemove("/tmp/test.bpf.o").Return(nil)
-}
-
-// TestDo tests all code paths of app.do():
-//   - rootCheck error
-//   - ensureBPFFS error (mkdir failure, mount failure)
-//   - success (BPFFS already mounted, mount fresh)
-//
-// setup must set method-specific success expectations.
-func (t *testApp) TestDo(setup func(), method func() error) {
+func (t *AppTest) AssertNoTempFiles() {
 	t.Helper()
-
-	t.ExpectRootCheckError()
-	t.Err(method(), internal.ErrMustBeRoot)
-
-	t.ExpectRootCheckSuccess()
-	t.ExpectEnsureBPFFSMkdirError()
-	t.Match(method(), errMockMkdir.Error())
-
-	t.ExpectRootCheckSuccess()
-	t.ExpectEnsureBPFFSMountError()
-	t.Match(method(), "mount bpf")
-
-	t.ExpectRootCheckSuccess()
-	t.ExpectEnsureBPFFSMounted()
-	setup()
-	t.Nil(method())
-
-	t.ExpectRootCheckSuccess()
-	t.ExpectEnsureBPFFSMount()
-	setup()
-	t.Nil(method())
+	names, _ := fs.Glob(t.World.FS, "tmp/*")
+	t.Zero(names)
 }
 
-// Load.
-
-func TestAppLoad_Do(tt *testing.T) {
-	tt.Parallel()
-	t := newTestApp(tt)
-	t.TestDo(t.ExpectLoadSuccess, t.App.Load)
+func (t *AppTest) AssertClean() {
+	t.Helper()
+	t.Len(t.World.Attached, 0)
+	t.AssertNoTempFiles()
+	_, err := fs.Stat(t.World.FS, BPFDir)
+	t.Err(err, fs.ErrNotExist, "expected BPF dir to not exist")
 }
 
-func TestAppLoad_WriteTempBPFObjError(tt *testing.T) {
-	tt.Parallel()
-	t := newTestApp(tt)
+// testDoFailures tests the shared do() failure paths across Load/Unload/SetMark.
+func testDoFailures(t *testing.T, f func(t *AppTest) error) {
+	t.Helper()
+	t.Parallel()
 
-	t.ExpectRootCheckSuccess()
-	t.ExpectMounted()
-	t.ExpectCleanup(errMockRemove)
-	t.ExpectTempFileError(errMockMkdir, nil, nil)
-	t.ExpectCleanup(errMockRemove)
+	t.Run("RootCheckError", func(tt *testing.T) {
+		tt.Parallel()
+		t := newAppTest(tt)
+		t.World.OsGeteuidFunc.PushReturn(1000)
+		t.Err(f(t), internal.ErrMustBeRoot)
+	})
 
-	err := t.App.Load()
-	t.Match(err, errMockMkdir.Error())
+	t.Run("EnsureBPFFSMkdirError", func(tt *testing.T) {
+		tt.Parallel()
+		t := newAppTest(tt)
+		t.World.Mounted = false
+		t.World.OsMkdirAllFunc.PushReturn(errMkdir)
+		t.Err(f(t), errMkdir)
+	})
+
+	t.Run("EnsureBPFFSMountError", func(tt *testing.T) {
+		tt.Parallel()
+		t := newAppTest(tt)
+		t.World.Mounted = false
+		t.World.Cmds.MountpointFunc.PushReturn(errNotMount)
+		t.World.Cmds.MountBPFFunc.PushReturn([]byte("mount failure details"), errMountFailed)
+		t.Err(f(t), errMountFailed)
+	})
 }
 
-func TestAppLoad_TempFileWriteError(tt *testing.T) {
-	tt.Parallel()
-	t := newTestApp(tt)
-
-	t.ExpectRootCheckSuccess()
-	t.ExpectMounted()
-	t.ExpectCleanup(errMockRemove)
-	t.ExpectTempFileError(nil, errMockMkdir, nil)
-	t.ExpectCleanup(errMockRemove)
-
-	err := t.App.Load()
-	t.Match(err, "write temp file")
+func TestAppLoad_DoErrors(tt *testing.T) {
+	testDoFailures(tt, func(t *AppTest) error { return t.App.Load() })
 }
 
-func TestAppLoad_TempFileCloseError(tt *testing.T) {
-	tt.Parallel()
-	t := newTestApp(tt)
+func TestAppLoad_WriteTempErrors(t *testing.T) {
+	t.Parallel()
 
-	t.ExpectRootCheckSuccess()
-	t.ExpectMounted()
-	t.ExpectCleanup(errMockRemove)
-	t.ExpectTempFileError(nil, nil, errMockMkdir)
-	t.ExpectCleanup(errMockRemove)
+	t.Run("CreateError", func(tt *testing.T) {
+		tt.Parallel()
+		t := newAppTest(tt)
+		t.World.OsCreateTempFunc.PushReturn(nil, errMkdir)
+		err := t.App.Load()
+		t.Err(err, errMkdir)
+		t.AssertClean()
+	})
 
-	err := t.App.Load()
-	t.Match(err, "close temp file")
+	t.Run("WriteError", func(tt *testing.T) {
+		tt.Parallel()
+		t := newAppTest(tt)
+		t.World.OsCreateTempFunc.PushReturn(&OsFile{
+			name:  "tmp/test.bpf.o",
+			write: func(_ []byte) (int, error) { return 0, errWrite },
+			close: func() error { return nil },
+		}, nil)
+		err := t.App.Load()
+		t.Err(err, errWrite)
+		t.AssertClean()
+	})
+
+	t.Run("CloseError", func(tt *testing.T) {
+		tt.Parallel()
+		t := newAppTest(tt)
+		t.World.OsCreateTempFunc.PushReturn(&OsFile{
+			name:  "tmp/test.bpf.o",
+			write: func(data []byte) (int, error) { return len(data), nil },
+			close: func() error { return errClose },
+		}, nil)
+		err := t.App.Load()
+		t.Err(err, errClose)
+		t.AssertClean()
+	})
 }
 
 func TestAppLoad_CleanupPreviousStateError(tt *testing.T) {
 	tt.Parallel()
-	t := newTestApp(tt)
+	t := newAppTest(tt)
 
-	t.ExpectRootCheckSuccess()
-	t.ExpectMounted()
-	for _, att := range internal.CgroupAttaches() {
-		t.ExpectCmd("bpftool", "cgroup", "detach",
-			internal.CgroupRoot, att.AttachType, "pinned", filepath.Join(internal.BPFDir, att.Name),
-		).Run(nil)
+	// Simulate previous Load state.
+	t.World.ExecCommand("bpftool", "prog", "loadall", "fake.bpf.o",
+		internal.BPFDir, "pinmaps", internal.BPFDir+"/maps").CombinedOutput()
+	t.World.ExecCommand("bpftool", "cgroup", "attach", internal.CgroupRoot,
+		"cgroup_inet4_bind", "pinned", internal.BPFDir+"/same_cgroup_bind4").Run()
+
+	t.World.Cmds.BpftoolCgroupDetachFunc.PushReturn(errRemove)
+
+	err := t.App.Load()
+	t.Match(err, "cleanup previous state: BPF program still attached to cgroup: same_cgroup_bind4")
+}
+
+func TestAppLoad_LoadallError(tt *testing.T) {
+	tt.Parallel()
+	t := newAppTest(tt)
+
+	t.World.Cmds.BpftoolProgLoadAllFunc.PushReturn(nil, errLoadall)
+
+	err := t.App.Load()
+	t.Err(err, errLoadall)
+	t.AssertClean()
+}
+
+func TestAppLoad_AttachErrorRollsBack(tt *testing.T) {
+	tt.Parallel()
+	t := newAppTest(tt)
+
+	for range len(internal.CgroupAttaches()) - 1 {
+		t.World.Cmds.BpftoolCgroupAttachFunc.PushReturn(nil)
 	}
-	t.Expect.OsRemoveAll(internal.BPFDir).Return(nil)
-	// checkUnloaded: program still attached (cgroup show still mentions it).
-	t.Expect.OsStat(internal.BPFDir).Return(nil, os.ErrNotExist)
-	attaches := []byte(`[{"name":"same_cgroup_bind4","attach_type":"cgroup_inet4_bind"}]`)
-	t.ExpectCmd("bpftool", "--json", "cgroup", "show", internal.CgroupRoot).Output(attaches, nil)
+	t.World.Cmds.BpftoolCgroupAttachFunc.PushReturn(errAttach)
 
 	err := t.App.Load()
-	t.Match(err, "cleanup previous state")
+	t.Err(err, errAttach)
+	t.AssertClean()
 }
 
-func TestAppLoad_BPFToolLoadallError(tt *testing.T) {
-	tt.Parallel()
-	t := newTestApp(tt)
+func TestAppLoad_Mounted(t *testing.T) {
+	t.Parallel()
 
-	t.ExpectRootCheckSuccess()
-	t.ExpectMounted()
-	t.ExpectCleanup(errMockRemove)
-	t.ExpectTempFile()
-	t.ExpectCmd("bpftool", "prog", "loadall",
-		gomock.Any(), internal.BPFDir, "pinmaps", internal.BPFDir+"/maps",
-	).CombinedOutput(nil, errMockLoadall)
-	t.ExpectCleanup(errMockRemove)
+	for _, tc := range []bool{false, true} {
+		t.Run(fmt.Sprintf("Mounted=%t", tc), func(tt *testing.T) {
+			tt.Parallel()
+			t := newAppTest(tt)
 
-	err := t.App.Load()
-	t.Match(err, "bpftool loadall")
-}
+			t.World.Mounted = tc
 
-func TestAppLoad_AttachError(tt *testing.T) {
-	tt.Parallel()
-	t := newTestApp(tt)
-
-	t.ExpectRootCheckSuccess()
-	t.ExpectMounted()
-	t.ExpectCleanup(errMockRemove)
-	t.ExpectTempFile()
-	t.ExpectCmd("bpftool", "prog", "loadall",
-		gomock.Any(), internal.BPFDir, "pinmaps", internal.BPFDir+"/maps",
-	).CombinedOutput(nil, nil)
-	entries := internal.CgroupAttaches()
-	for _, att := range entries[:len(entries)-1] {
-		t.ExpectCmd("bpftool", "cgroup", "attach",
-			internal.CgroupRoot, att.AttachType, "pinned", filepath.Join(internal.BPFDir, att.Name),
-		).Run(nil)
+			t.Nil(t.App.Load())
+			t.True(t.World.Mounted)
+			_, err := fs.Stat(t.World.FS, BPFDir)
+			t.Nil(err)
+			t.DeepEqual(t.World.Attached, internal.CgroupAttaches())
+			t.AssertNoTempFiles()
+		})
 	}
-	lastAtt := entries[len(entries)-1]
-	t.ExpectCmd("bpftool", "cgroup", "attach",
-		internal.CgroupRoot, lastAtt.AttachType, "pinned", filepath.Join(internal.BPFDir, lastAtt.Name),
-	).Run(errMockAttach)
-
-	t.ExpectCleanup(nil)
-
-	err := t.App.Load()
-	t.Match(err, "attach")
 }
 
-func TestAppLoad_MountBPFFSSuccess(tt *testing.T) {
-	tt.Parallel()
-	t := newTestApp(tt)
-
-	t.ExpectRootCheckSuccess()
-	t.ExpectEnsureBPFFSMount()
-	t.ExpectLoadSuccess()
-
-	t.Nil(t.App.Load())
-}
-
-func TestAppLoad_Success(tt *testing.T) {
-	tt.Parallel()
-	t := newTestApp(tt)
-
-	t.ExpectRootCheckSuccess()
-	t.ExpectMounted()
-	t.ExpectLoadSuccess()
-
-	t.Nil(t.App.Load())
-}
-
-// SetMark.
-
-func TestAppSetMark_Do(tt *testing.T) {
-	tt.Parallel()
-	t := newTestApp(tt)
-	t.TestDo(t.ExpectSetMarkSuccess, func() error { return t.App.SetMark(internal.Mark(0x10000000)) })
-}
-
-func TestAppSetMark_Success(tt *testing.T) {
-	tt.Parallel()
-	t := newTestApp(tt)
-
-	t.ExpectRootCheckSuccess()
-	t.ExpectMounted()
-	t.ExpectSetMarkSuccess()
-
-	t.Nil(t.App.SetMark(internal.Mark(0x10000000)))
-}
-
-func TestAppSetMark_Error(tt *testing.T) {
-	tt.Parallel()
-	t := newTestApp(tt)
-
-	t.ExpectRootCheckSuccess()
-	t.ExpectMounted()
-	t.ExpectCmd("bpftool", "map", "update",
-		"pinned", internal.BPFDir+"/maps/same_cgroup_mark_cfg",
-		"key", "hex", "00", "00", "00", "00",
-		"value", "hex", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
-	).Run(errMockBpftool)
-
-	err := t.App.SetMark(internal.Mark(0x10000000))
-	t.Match(err, "bpftool map update")
-}
-
-// Unload.
-
-func TestAppUnload_Do(tt *testing.T) {
-	tt.Parallel()
-	t := newTestApp(tt)
-	t.TestDo(t.ExpectUnloadSuccess, t.App.Unload)
+func TestAppUnload_DoErrors(tt *testing.T) {
+	testDoFailures(tt, func(t *AppTest) error { return t.App.Unload() })
 }
 
 func TestAppUnload_WithoutBPF(tt *testing.T) {
 	tt.Parallel()
-	t := newTestApp(tt)
-
-	t.ExpectRootCheckSuccess()
-	t.ExpectMounted()
-	t.ExpectCleanup(errMockRemove)
+	t := newAppTest(tt)
 
 	t.Nil(t.App.Unload())
+	t.AssertClean()
 }
 
 func TestAppUnload_WithBPF(tt *testing.T) {
 	tt.Parallel()
-	t := newTestApp(tt)
-
-	t.ExpectRootCheckSuccess()
-	t.ExpectMounted()
-	t.ExpectCleanup(nil)
+	t := newAppTest(tt)
+	t.World.ExecCommand("bpftool", "prog", "loadall", "fake.bpf.o",
+		internal.BPFDir, "pinmaps", internal.BPFDir+"/maps").CombinedOutput()
+	for _, att := range internal.CgroupAttaches() {
+		t.World.ExecCommand("bpftool", "cgroup", "attach", internal.CgroupRoot,
+			att.AttachType, "pinned", internal.BPFDir+"/"+att.Name).Run()
+	}
 
 	t.Nil(t.App.Unload())
+	t.AssertClean()
 }
 
-func TestAppUnload_CheckUnloadedBPFDirExists(tt *testing.T) {
+func TestAppUnload_BPFDirExists(tt *testing.T) {
 	tt.Parallel()
-	t := newTestApp(tt)
+	t := newAppTest(tt)
+	t.World.FS[BPFDir] = &fstest.MapFile{Mode: os.ModeDir | internal.BPFMode}
 
-	t.ExpectRootCheckSuccess()
-	t.ExpectMounted()
-	for _, att := range internal.CgroupAttaches() {
-		t.ExpectCmd("bpftool", "cgroup", "detach",
-			internal.CgroupRoot, att.AttachType, "pinned", filepath.Join(internal.BPFDir, att.Name),
-		).Run(errMockRemove)
-	}
-	t.Expect.OsRemoveAll(internal.BPFDir).Return(nil)
-	// checkUnloaded: BPF pin directory still exists.
-	t.Expect.OsStat(internal.BPFDir).Return(nil, nil)
-	t.ExpectCmd("bpftool", "--json", "cgroup", "show", internal.CgroupRoot).Output([]byte("[]"), nil)
+	t.World.OsRemoveAllFunc.PushReturn(errRemove)
 
 	err := t.App.Unload()
 	t.Match(err, "BPF pin directory still exists")
 }
 
-func TestAppUnload_CheckUnloadedBPFDirStatError(tt *testing.T) {
+func TestAppUnload_BPFDirStatError(tt *testing.T) {
 	tt.Parallel()
-	t := newTestApp(tt)
+	t := newAppTest(tt)
 
-	t.ExpectRootCheckSuccess()
-	t.ExpectMounted()
-	for _, att := range internal.CgroupAttaches() {
-		t.ExpectCmd("bpftool", "cgroup", "detach",
-			internal.CgroupRoot, att.AttachType, "pinned", filepath.Join(internal.BPFDir, att.Name),
-		).Run(errMockRemove)
-	}
-	t.Expect.OsRemoveAll(internal.BPFDir).Return(nil)
-	// checkUnloaded: stat returns an unrelated error (not ErrNotExist).
-	t.Expect.OsStat(internal.BPFDir).Return(nil, errMockStat)
-	t.ExpectCmd("bpftool", "--json", "cgroup", "show", internal.CgroupRoot).Output([]byte("[]"), nil)
+	t.World.OsStatFunc.PushReturn(nil, errStat)
 
 	err := t.App.Unload()
-	t.Match(err, "stat BPF pin dir")
+	t.Err(err, errStat)
 }
 
-func TestAppUnload_CheckUnloadedCgroupShowError(tt *testing.T) {
-	tt.Parallel()
-	t := newTestApp(tt)
+func TestAppUnload_CgroupShow(t *testing.T) {
+	t.Parallel()
 
-	t.ExpectRootCheckSuccess()
-	t.ExpectMounted()
-	for _, att := range internal.CgroupAttaches() {
-		t.ExpectCmd("bpftool", "cgroup", "detach",
-			internal.CgroupRoot, att.AttachType, "pinned", filepath.Join(internal.BPFDir, att.Name),
-		).Run(errMockRemove)
+	tests := []struct {
+		name    string
+		ret     []byte
+		retErr  error
+		wantErr string
+	}{
+		{name: "NoOutput", ret: []byte{}},
+		{name: "BracketOnly", ret: []byte("[")},
+		{name: "InvalidJSON", ret: []byte("{")},
+		{name: "ExitCode1", retErr: exec.Command("false").Run(), wantErr: "cannot verify cgroup attachments"},
+		{name: "ExitCode2", retErr: exec.Command("sh", "-c", "exit 2").Run()},
+		{name: "Error", retErr: errBpftool, wantErr: "cannot verify cgroup attachments"},
 	}
-	t.Expect.OsRemoveAll(internal.BPFDir).Return(nil)
-	// checkUnloaded: BPF pin directory cleaned.
-	t.Expect.OsStat(internal.BPFDir).Return(nil, os.ErrNotExist)
-	// checkUnloaded: bpftool cgroup show fails.
-	t.ExpectCmd("bpftool", "--json", "cgroup", "show", internal.CgroupRoot).Output(nil, errMockBpftool)
 
-	err := t.App.Unload()
-	t.Match(err, "cannot verify cgroup attachments")
+	for _, tc := range tests {
+		t.Run(tc.name, func(tt *testing.T) {
+			tt.Parallel()
+			t := newAppTest(tt)
+			t.World.Cmds.BpftoolCgroupShowFunc.PushReturn(tc.ret, tc.retErr)
+			err := t.App.Unload()
+			if tc.wantErr != "" {
+				t.Match(err, tc.wantErr)
+			} else {
+				t.Nil(err)
+			}
+		})
+	}
 }
 
-func TestAppUnload_CheckUnloadedCgroupShowExitCode2(tt *testing.T) {
-	tt.Parallel()
-	t := newTestApp(tt)
-
-	cmd := exec.Command("sh", "-c", "exit 2") //nolint:noctx // Trivial, exits immediately.
-	exitErr2 := cmd.Run()
-
-	t.ExpectRootCheckSuccess()
-	t.ExpectMounted()
-	for _, att := range internal.CgroupAttaches() {
-		t.ExpectCmd("bpftool", "cgroup", "detach",
-			internal.CgroupRoot, att.AttachType, "pinned", filepath.Join(internal.BPFDir, att.Name),
-		).Run(errMockRemove)
-	}
-	t.Expect.OsRemoveAll(internal.BPFDir).Return(nil)
-	// checkUnloaded: BPF pin directory cleaned.
-	t.Expect.OsStat(internal.BPFDir).Return(nil, os.ErrNotExist)
-	// checkUnloaded: bpftool cgroup show exits with code 2 (no programs).
-	t.ExpectCmd("bpftool", "--json", "cgroup", "show", internal.CgroupRoot).Output(nil, exitErr2)
-
-	err := t.App.Unload()
-	t.Nil(err)
+func TestAppSetMark_DoErrors(tt *testing.T) {
+	testDoFailures(tt, func(t *AppTest) error { return t.App.SetMark(internal.Mark(0x10000000)) })
 }
 
-func TestAppUnload_CheckUnloadedCgroupShowEmptyOutput(tt *testing.T) {
+func TestAppSetMark_Success(tt *testing.T) {
 	tt.Parallel()
-	t := newTestApp(tt)
+	t := newAppTest(tt)
+	mark := internal.Mark(0x10000000)
 
-	t.ExpectRootCheckSuccess()
-	t.ExpectMounted()
-	for _, att := range internal.CgroupAttaches() {
-		t.ExpectCmd("bpftool", "cgroup", "detach",
-			internal.CgroupRoot, att.AttachType, "pinned", filepath.Join(internal.BPFDir, att.Name),
-		).Run(errMockRemove)
-	}
-	t.Expect.OsRemoveAll(internal.BPFDir).Return(nil)
-	// checkUnloaded: BPF pin directory cleaned.
-	t.Expect.OsStat(internal.BPFDir).Return(nil, os.ErrNotExist)
-	// checkUnloaded: bpftool cgroup show returns empty output (no programs).
-	t.ExpectCmd("bpftool", "--json", "cgroup", "show", internal.CgroupRoot).Output([]byte{}, nil)
-
-	err := t.App.Unload()
-	t.Nil(err)
+	t.Nil(t.App.SetMark(mark))
+	t.DeepEqual(t.World.markBytes, mark.ToLE())
 }
 
-func TestAppUnload_CheckUnloadedCgroupShowBracketOnly(tt *testing.T) {
+func TestAppSetMark_Error(tt *testing.T) {
 	tt.Parallel()
-	t := newTestApp(tt)
+	t := newAppTest(tt)
 
-	t.ExpectRootCheckSuccess()
-	t.ExpectMounted()
-	for _, att := range internal.CgroupAttaches() {
-		t.ExpectCmd("bpftool", "cgroup", "detach",
-			internal.CgroupRoot, att.AttachType, "pinned", filepath.Join(internal.BPFDir, att.Name),
-		).Run(errMockRemove)
-	}
-	t.Expect.OsRemoveAll(internal.BPFDir).Return(nil)
-	// checkUnloaded: BPF pin directory cleaned.
-	t.Expect.OsStat(internal.BPFDir).Return(nil, os.ErrNotExist)
-	// checkUnloaded: bpftool cgroup show returns just "[" (bpftool bug).
+	t.World.Cmds.BpftoolMapUpdateFunc.PushReturn(errBpftool)
 
-	out := []byte("[")
-	t.ExpectCmd("bpftool", "--json", "cgroup", "show", internal.CgroupRoot).Output(out, nil)
-
-	err := t.App.Unload()
-	t.Nil(err)
-}
-
-func TestAppUnload_CheckUnloadedCgroupShowInvalidJSON(tt *testing.T) {
-	tt.Parallel()
-	t := newTestApp(tt)
-
-	t.ExpectRootCheckSuccess()
-	t.ExpectMounted()
-	for _, att := range internal.CgroupAttaches() {
-		t.ExpectCmd("bpftool", "cgroup", "detach",
-			internal.CgroupRoot, att.AttachType, "pinned", filepath.Join(internal.BPFDir, att.Name),
-		).Run(errMockRemove)
-	}
-	t.Expect.OsRemoveAll(internal.BPFDir).Return(nil)
-	t.Expect.OsStat(internal.BPFDir).Return(nil, os.ErrNotExist)
-	t.ExpectCmd("bpftool", "--json", "cgroup", "show", internal.CgroupRoot).Output([]byte("not-json"), nil)
-
-	err := t.App.Unload()
-	t.Nil(err)
+	err := t.App.SetMark(internal.Mark(0x10000000))
+	t.Match(err, "bpftool map update")
 }

@@ -2,7 +2,7 @@
 // ExecCommand dispatching without changing app.go.
 package worldcmds
 
-//go:generate go-mockgen --disable-formatting -f -p internal_test -o ../mock.worldcmds_test.go -i WorldCmds .
+//go:generate go-mockgen -f --for-test --prefix Stub -o ../stub.$GOFILE -i WorldCmds .
 
 // WorldCmds provides typed methods for commands that ExecCommand dispatches to.
 // Each method models one specific command with its natural return type.
