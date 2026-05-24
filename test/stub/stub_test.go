@@ -21,14 +21,14 @@ func TestStubE(tt *testing.T) {
 	t.Run("EmptyQueueUsesDefault", func(tt *testing.T) {
 		tt.Parallel()
 		t := check.T(tt).MustAll()
-		s := stub.NewStubE(func() error { return nil })
+		s := stub.NewErr(func() error { return nil })
 		t.Nil(s.Call())
 	})
 
 	t.Run("FailReturnsError", func(tt *testing.T) {
 		tt.Parallel()
 		t := check.T(tt).MustAll()
-		s := stub.NewStubE(func() error { return nil })
+		s := stub.NewErr(func() error { return nil })
 		s.Fail(errFail)
 		t.Err(s.Call(), errFail)
 	})
@@ -36,7 +36,7 @@ func TestStubE(tt *testing.T) {
 	t.Run("ReturnsSucceeds", func(tt *testing.T) {
 		tt.Parallel()
 		t := check.T(tt).MustAll()
-		s := stub.NewStubE(func() error { return errFail })
+		s := stub.NewErr(func() error { return errFail })
 		s.Returns()
 		t.Nil(s.Call())
 	})
@@ -44,7 +44,7 @@ func TestStubE(tt *testing.T) {
 	t.Run("DefaultAfterFailUsesDefault", func(tt *testing.T) {
 		tt.Parallel()
 		t := check.T(tt).MustAll()
-		s := stub.NewStubE(func() error { return nil })
+		s := stub.NewErr(func() error { return nil })
 		s.Fail(errFail)
 		s.Default()
 		t.Err(s.Call(), errFail)
@@ -54,7 +54,7 @@ func TestStubE(tt *testing.T) {
 	t.Run("MultipleCallsConsumeQueue", func(tt *testing.T) {
 		tt.Parallel()
 		t := check.T(tt).MustAll()
-		s := stub.NewStubE(func() error { return nil })
+		s := stub.NewErr(func() error { return nil })
 		s.Fail(errFail)
 		s.Fail(errFail)
 		s.Fail(errFail)
@@ -68,7 +68,7 @@ func TestStubE(tt *testing.T) {
 	t.Run("DefaultThenFailThenDefault", func(tt *testing.T) {
 		tt.Parallel()
 		t := check.T(tt).MustAll()
-		s := stub.NewStubE(func() error { return nil })
+		s := stub.NewErr(func() error { return nil })
 		s.Default()
 		s.Fail(errFail)
 		s.Default()
@@ -81,7 +81,7 @@ func TestStubE(tt *testing.T) {
 		tt.Parallel()
 		t := check.T(tt).MustAll()
 		var gotArg string
-		s := stub.NewStubE(func(v string) error {
+		s := stub.NewErr(func(v string) error {
 			gotArg = v
 			return nil
 		})
@@ -97,7 +97,7 @@ func TestStubRE(tt *testing.T) {
 	t.Run("EmptyQueueUsesDefault", func(tt *testing.T) {
 		tt.Parallel()
 		t := check.T(tt).MustAll()
-		s := stub.NewStubRE[string](func() (string, error) { return "hello", nil })
+		s := stub.NewResErr[string](func() (string, error) { return "hello", nil })
 		r, err := s.Call()
 		t.Nil(err)
 		t.Equal(r, "hello")
@@ -106,7 +106,7 @@ func TestStubRE(tt *testing.T) {
 	t.Run("FailReturnsZeroAndError", func(tt *testing.T) {
 		tt.Parallel()
 		t := check.T(tt).MustAll()
-		s := stub.NewStubRE[string](func() (string, error) { return "hello", nil })
+		s := stub.NewResErr[string](func() (string, error) { return "hello", nil })
 		s.Fail(errFail)
 		r, err := s.Call()
 		t.Err(err, errFail)
@@ -116,7 +116,7 @@ func TestStubRE(tt *testing.T) {
 	t.Run("ReturnsValues", func(tt *testing.T) {
 		tt.Parallel()
 		t := check.T(tt).MustAll()
-		s := stub.NewStubRE[string](func() (string, error) { return "hello", nil })
+		s := stub.NewResErr[string](func() (string, error) { return "hello", nil })
 		s.Returns("world", nil)
 		r, err := s.Call()
 		t.Nil(err)
@@ -126,7 +126,7 @@ func TestStubRE(tt *testing.T) {
 	t.Run("FailTwiceThenDefault", func(tt *testing.T) {
 		tt.Parallel()
 		t := check.T(tt).MustAll()
-		s := stub.NewStubRE[string](func() (string, error) { return "hello", nil })
+		s := stub.NewResErr[string](func() (string, error) { return "hello", nil })
 		s.Fail(errFail)
 		s.Fail(errTest)
 		r, err := s.Call()
@@ -143,7 +143,7 @@ func TestStubRE(tt *testing.T) {
 	t.Run("ReturnsError", func(tt *testing.T) {
 		tt.Parallel()
 		t := check.T(tt).MustAll()
-		s := stub.NewStubRE[string](func() (string, error) { return "hello", nil })
+		s := stub.NewResErr[string](func() (string, error) { return "hello", nil })
 		s.Returns("", errFail)
 		r, err := s.Call()
 		t.Err(err, errFail)
@@ -153,7 +153,7 @@ func TestStubRE(tt *testing.T) {
 	t.Run("MixedFailReturnsDefault", func(tt *testing.T) {
 		tt.Parallel()
 		t := check.T(tt).MustAll()
-		s := stub.NewStubRE[string](func() (string, error) { return "hello", nil })
+		s := stub.NewResErr[string](func() (string, error) { return "hello", nil })
 		s.Fail(errFail)
 		s.Returns("world", nil)
 		s.Default()
@@ -176,14 +176,14 @@ func TestStubR(tt *testing.T) {
 	t.Run("EmptyQueueUsesDefault", func(tt *testing.T) {
 		tt.Parallel()
 		t := check.T(tt).MustAll()
-		s := stub.NewStubR[int](func() int { return 42 })
+		s := stub.NewRes[int](func() int { return 42 })
 		t.Equal(s.Call(), 42)
 	})
 
 	t.Run("ReturnsValue", func(tt *testing.T) {
 		tt.Parallel()
 		t := check.T(tt).MustAll()
-		s := stub.NewStubR[int](func() int { return 42 })
+		s := stub.NewRes[int](func() int { return 42 })
 		s.Returns(100)
 		t.Equal(s.Call(), 100)
 	})
@@ -191,7 +191,7 @@ func TestStubR(tt *testing.T) {
 	t.Run("ReturnsTwiceThenDefault", func(tt *testing.T) {
 		tt.Parallel()
 		t := check.T(tt).MustAll()
-		s := stub.NewStubR[int](func() int { return 42 })
+		s := stub.NewRes[int](func() int { return 42 })
 		s.Returns(100)
 		s.Returns(200)
 		t.Equal(s.Call(), 100)
@@ -202,7 +202,7 @@ func TestStubR(tt *testing.T) {
 	t.Run("DefaultAfterReturns", func(tt *testing.T) {
 		tt.Parallel()
 		t := check.T(tt).MustAll()
-		s := stub.NewStubR[int](func() int { return 42 })
+		s := stub.NewRes[int](func() int { return 42 })
 		s.Returns(100)
 		s.Default()
 		t.Equal(s.Call(), 100)
@@ -218,7 +218,7 @@ func TestStubV(tt *testing.T) {
 		tt.Parallel()
 		t := check.T(tt).MustAll()
 		called := false
-		s := stub.NewStubV(func() { called = true })
+		s := stub.NewVoid(func() { called = true })
 		s.Call()
 		t.True(called)
 	})
@@ -227,7 +227,7 @@ func TestStubV(tt *testing.T) {
 		tt.Parallel()
 		t := check.T(tt).MustAll()
 		called := false
-		s := stub.NewStubV(func() { called = true })
+		s := stub.NewVoid(func() { called = true })
 		s.Returns()
 		s.Call()
 		t.False(called)
@@ -237,7 +237,7 @@ func TestStubV(tt *testing.T) {
 		tt.Parallel()
 		t := check.T(tt).MustAll()
 		var calls int
-		s := stub.NewStubV(func() { calls++ })
+		s := stub.NewVoid(func() { calls++ })
 		s.Returns()
 		s.Default()
 		s.Call()

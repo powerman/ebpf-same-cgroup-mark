@@ -72,17 +72,17 @@ func extractError(out []reflect.Value) error {
 // StubE — for methods with signature f(args) error
 // ---------------------------------------------------------------------------
 
-// StubE provides override queues for methods returning (error).
-type StubE struct{ stub }
+// Err provides override queues for methods returning (error).
+type Err struct{ stub }
 
-// NewStubE creates a StubE with the given default implementation.
+// NewErr creates a StubE with the given default implementation.
 // The def argument must be a function matching f(args) error.
-func NewStubE(def any) *StubE {
-	return &StubE{stub: stub{defCall: reflect.ValueOf(def).Call}}
+func NewErr(def any) Err {
+	return Err{stub: stub{defCall: reflect.ValueOf(def).Call}}
 }
 
 // Fail queues a handler that returns err and skips the default implementation.
-func (s *StubE) Fail(err error) {
+func (s *Err) Fail(err error) {
 	s.queue = append(s.queue, stubEntry{
 		call: func(_ []reflect.Value) []reflect.Value {
 			return []reflect.Value{reflect.ValueOf(err)}
@@ -91,7 +91,7 @@ func (s *StubE) Fail(err error) {
 }
 
 // Returns queues a handler that returns a nil error (success).
-func (s *StubE) Returns() {
+func (s *Err) Returns() {
 	s.queue = append(s.queue, stubEntry{
 		call: func(_ []reflect.Value) []reflect.Value {
 			return []reflect.Value{reflect.Zero(reflect.TypeFor[error]())}
@@ -101,7 +101,7 @@ func (s *StubE) Returns() {
 
 // Call invokes the next queued handler with the given args,
 // or falls back to the default implementation if the queue is empty.
-func (s *StubE) Call(args ...any) error {
+func (s *Err) Call(args ...any) error {
 	if s.len() > 0 {
 		return extractError(s.callNext(s.values(args...)))
 	}
@@ -112,24 +112,24 @@ func (s *StubE) Call(args ...any) error {
 // StubRE — for methods with signature f(args) (R, error)
 // ---------------------------------------------------------------------------
 
-// StubRE provides override queues for methods returning (R, error).
-type StubRE[R any] struct {
+// ResErr provides override queues for methods returning (R, error).
+type ResErr[R any] struct {
 	stub
 	resultZero reflect.Value
 }
 
-// NewStubRE creates a StubRE with the given default implementation.
+// NewResErr creates a StubRE with the given default implementation.
 // The def argument must be a function matching f(args) (R, error).
-func NewStubRE[R any](def any) StubRE[R] {
+func NewResErr[R any](def any) ResErr[R] {
 	var z R
-	return StubRE[R]{
+	return ResErr[R]{
 		stub:       stub{defCall: reflect.ValueOf(def).Call},
 		resultZero: reflect.ValueOf(&z).Elem(),
 	}
 }
 
 // Fail queues a handler that returns (zero, err).
-func (s *StubRE[R]) Fail(err error) {
+func (s *ResErr[R]) Fail(err error) {
 	s.queue = append(s.queue, stubEntry{
 		call: func(_ []reflect.Value) []reflect.Value {
 			return []reflect.Value{s.resultZero, reflect.ValueOf(err)}
@@ -140,7 +140,7 @@ func (s *StubRE[R]) Fail(err error) {
 // Returns queues a handler that returns the given values.
 // It expects exactly 2 values: (result, error).
 // A nil error is replaced with a nil error interface.
-func (s *StubRE[R]) Returns(vals ...any) {
+func (s *ResErr[R]) Returns(vals ...any) {
 	if len(vals) != 2 {
 		panic("StubRE.Returns expects exactly 2 values: (result, error)")
 	}
@@ -163,7 +163,7 @@ func (s *StubRE[R]) Returns(vals ...any) {
 
 // Call invokes the next queued handler with the given args,
 // or falls back to the default implementation if the queue is empty.
-func (s *StubRE[R]) Call(args ...any) (R, error) {
+func (s *ResErr[R]) Call(args ...any) (R, error) {
 	var r R
 	var out []reflect.Value
 	if s.len() > 0 {
@@ -186,24 +186,24 @@ func (s *StubRE[R]) Call(args ...any) (R, error) {
 // StubR — for methods with signature f(args) R
 // ---------------------------------------------------------------------------
 
-// StubR provides override queues for methods returning R.
-type StubR[R any] struct {
+// Res provides override queues for methods returning R.
+type Res[R any] struct {
 	stub
 	resultZero reflect.Value
 }
 
-// NewStubR creates a StubR with the given default implementation.
+// NewRes creates a StubR with the given default implementation.
 // The def argument must be a function matching f(args) R.
-func NewStubR[R any](def any) StubR[R] {
+func NewRes[R any](def any) Res[R] {
 	var z R
-	return StubR[R]{
+	return Res[R]{
 		stub:       stub{defCall: reflect.ValueOf(def).Call},
 		resultZero: reflect.ValueOf(&z).Elem(),
 	}
 }
 
 // Returns queues a handler that returns v.
-func (s *StubR[R]) Returns(v R) {
+func (s *Res[R]) Returns(v R) {
 	s.queue = append(s.queue, stubEntry{
 		call: func(_ []reflect.Value) []reflect.Value {
 			return []reflect.Value{reflect.ValueOf(v)}
@@ -213,7 +213,7 @@ func (s *StubR[R]) Returns(v R) {
 
 // Call invokes the next queued handler with the given args,
 // or falls back to the default implementation if the queue is empty.
-func (s *StubR[R]) Call(args ...any) R {
+func (s *Res[R]) Call(args ...any) R {
 	var r R
 	if s.len() > 0 {
 		out := s.callNext(s.values(args...))
@@ -233,17 +233,17 @@ func (s *StubR[R]) Call(args ...any) R {
 // StubV — for void methods f(args)
 // ---------------------------------------------------------------------------
 
-// StubV provides override queues for void methods.
-type StubV struct{ stub }
+// Void provides override queues for void methods.
+type Void struct{ stub }
 
-// NewStubV creates a StubV with the given default implementation.
+// NewVoid creates a StubV with the given default implementation.
 // The def argument must be a function matching f(args).
-func NewStubV(def any) *StubV {
-	return &StubV{stub: stub{defCall: reflect.ValueOf(def).Call}}
+func NewVoid(def any) *Void {
+	return &Void{stub: stub{defCall: reflect.ValueOf(def).Call}}
 }
 
 // Returns queues a handler that does nothing (skips the default).
-func (s *StubV) Returns() {
+func (s *Void) Returns() {
 	s.queue = append(s.queue, stubEntry{
 		call: func(_ []reflect.Value) []reflect.Value { return nil },
 	})
@@ -251,7 +251,7 @@ func (s *StubV) Returns() {
 
 // Call invokes the next queued handler with the given args,
 // or falls back to the default implementation if the queue is empty.
-func (s *StubV) Call(args ...any) {
+func (s *Void) Call(args ...any) {
 	if s.len() > 0 {
 		s.callNext(s.values(args...))
 		return

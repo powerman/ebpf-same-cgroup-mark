@@ -39,8 +39,8 @@ var (
 // so they can be used as keys in fstest.MapFS.
 func trimRoot(p string) string { return strings.TrimLeft(p, "/") }
 
-// worldState holds the current state of the simulated world.
-type worldState struct {
+// state holds the current state of the simulated world.
+type state struct {
 	euid       int
 	mounted    bool
 	fs         fstest.MapFS
@@ -74,7 +74,7 @@ type statefulAppTest struct {
 
 	World  *mockWorld
 	App    internal.App
-	state  *worldState
+	state  *state
 	faults *faults
 }
 
@@ -96,7 +96,7 @@ func newStatefulAppTest(tt *testing.T) *statefulAppTest {
 	tt.Helper()
 	t := &statefulAppTest{C: check.T(tt).MustAll()}
 
-	t.state = &worldState{
+	t.state = &state{
 		euid:      0,
 		mounted:   true,
 		fs:        make(fstest.MapFS),
@@ -115,7 +115,7 @@ func newStatefulAppTest(tt *testing.T) *statefulAppTest {
 
 // mockWorld implements main.World with stateful behavior driven by worldState and faults.
 type mockWorld struct {
-	state  *worldState
+	state  *state
 	faults *faults
 }
 
