@@ -36,6 +36,10 @@ var (
 	errStubWrite       = errors.New("stub write error")
 )
 
+// trimRoot strips the leading "/" from absolute paths
+// so they can be used as keys in fstest.MapFS.
+func trimRoot(p string) string { return strings.TrimLeft(p, "/") }
+
 // stubExecCmd implements internal.WorldExecCmd.
 type stubExecCmd struct {
 	run            func() error
@@ -286,7 +290,7 @@ func newStubAppTest(tt *testing.T) *stubAppTest {
 	tt.Helper()
 	t := &stubAppTest{C: check.T(tt).MustAll()}
 	t.World = newStubWorld()
-	t.App = internal.NewApp(t.World, testBPFObj)
+	t.App = internal.NewApp(t.World, []byte("test-bpf-object"))
 	return t
 }
 

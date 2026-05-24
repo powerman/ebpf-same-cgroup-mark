@@ -15,6 +15,8 @@ import (
 
 // Package-level sentinel errors for mocks (err113 requires static errors).
 var (
+	testBPFObj = []byte("test-bpf-object")
+
 	errMockAttach      = errors.New("mock attach error")
 	errMockBpftool     = errors.New("mock bpftool error")
 	errMockLoadall     = errors.New("mock loadall error")

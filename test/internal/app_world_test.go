@@ -21,7 +21,7 @@ import (
 )
 
 var (
-	testBPFObj = []byte("test-bpf-object")
+	testWorldBPFObj = []byte("test-bpf-object")
 
 	errWorldAttach      = errors.New("world attach error")
 	errWorldBpftool     = errors.New("world bpftool error")
@@ -35,9 +35,9 @@ var (
 	errWorldWrite       = errors.New("world write error")
 )
 
-// trimRoot strips the leading "/" from absolute paths
+// trimWorldRoot strips the leading "/" from absolute paths
 // so they can be used as keys in fstest.MapFS.
-func trimRoot(p string) string { return strings.TrimLeft(p, "/") }
+func trimWorldRoot(p string) string { return strings.TrimLeft(p, "/") }
 
 // state holds the current state of the simulated world.
 type state struct {
@@ -108,7 +108,7 @@ func newStatefulAppTest(tt *testing.T) *statefulAppTest {
 		detach: make(map[string]error),
 	}
 	t.World = &mockWorld{state: t.state, faults: t.faults}
-	t.App = internal.NewApp(t.World, testBPFObj)
+	t.App = internal.NewApp(t.World, testWorldBPFObj)
 
 	return t
 }
@@ -125,13 +125,13 @@ func (m *mockWorld) OsMkdirAll(path string, perm os.FileMode) error {
 	if m.faults.mkdir != nil {
 		return m.faults.mkdir
 	}
-	m.state.fs[trimRoot(path)] = &fstest.MapFile{Mode: os.ModeDir | perm}
+	m.state.fs[trimWorldRoot(path)] = &fstest.MapFile{Mode: os.ModeDir | perm}
 	return nil
 }
 
 func (m *mockWorld) OsRemove(name string) error {
 	delete(m.state.tempFiles, name)
-	delete(m.state.fs, trimRoot(name))
+	delete(m.state.fs, trimWorldRoot(name))
 	return m.faults.remove
 }
 
@@ -139,7 +139,7 @@ func (m *mockWorld) OsRemoveAll(path string) error {
 	if m.faults.removeAll != nil {
 		return m.faults.removeAll
 	}
-	delete(m.state.fs, trimRoot(path))
+	delete(m.state.fs, trimWorldRoot(path))
 	return nil
 }
 
@@ -147,7 +147,7 @@ func (m *mockWorld) OsStat(name string) (os.FileInfo, error) {
 	if m.faults.stat != nil {
 		return nil, m.faults.stat
 	}
-	return fs.Stat(m.state.fs, trimRoot(name))
+	return fs.Stat(m.state.fs, trimWorldRoot(name))
 }
 
 func (m *mockWorld) OsCreateTemp(_, _ string) (internal.WorldOsFile, error) {
@@ -163,7 +163,7 @@ func (m *mockWorld) OsCreateTemp(_, _ string) (internal.WorldOsFile, error) {
 			if m.faults.tempWrite != nil {
 				return 0, m.faults.tempWrite
 			}
-			return len(testBPFObj), nil
+			return len(testWorldBPFObj), nil
 		},
 		closeFn: func() error {
 			return m.faults.tempClose
@@ -200,7 +200,7 @@ func (m *mockWorld) ExecCommand(name string, args ...string) internal.WorldExecC
 				if m.faults.loadall != nil {
 					return nil, m.faults.loadall
 				}
-				m.state.fs[trimRoot(internal.BPFDir)] = &fstest.MapFile{Mode: os.ModeDir | internal.BPFMode}
+				m.state.fs[trimWorldRoot(internal.BPFDir)] = &fstest.MapFile{Mode: os.ModeDir | internal.BPFMode}
 				return nil, nil
 			},
 		}
@@ -214,7 +214,7 @@ func (m *mockWorld) ExecCommand(name string, args ...string) internal.WorldExecC
 				if err != nil {
 					return err
 				}
-				m.state.fs[trimRoot(internal.BPFDir)] = &fstest.MapFile{Mode: os.ModeDir | internal.BPFMode}
+				m.state.fs[trimWorldRoot(internal.BPFDir)] = &fstest.MapFile{Mode: os.ModeDir | internal.BPFMode}
 				m.state.attached[progName] = struct{}{}
 				return nil
 			},
@@ -317,7 +317,7 @@ func (t *statefulAppTest) attachedProgramNames() []string {
 func (t *statefulAppTest) assertClean() {
 	t.Len(t.attachedProgramNames(), 0)
 	t.Len(t.state.tempFiles, 0)
-	_, err := fs.Stat(t.state.fs, trimRoot(internal.BPFDir))
+	_, err := fs.Stat(t.state.fs, trimWorldRoot(internal.BPFDir))
 	if !errors.Is(err, fs.ErrNotExist) {
 		t.Fatal("expected BPF dir to not exist, but it does")
 	}
@@ -392,7 +392,7 @@ func TestAppLoad_StatefulWriteTempErrors(tt *testing.T) {
 func TestAppLoad_StatefulCleanupPreviousStateError(tt *testing.T) {
 	tt.Parallel()
 	t := newStatefulAppTest(tt)
-	t.state.fs[trimRoot(internal.BPFDir)] = &fstest.MapFile{Mode: os.ModeDir | internal.BPFMode}
+	t.state.fs[trimWorldRoot(internal.BPFDir)] = &fstest.MapFile{Mode: os.ModeDir | internal.BPFMode}
 	t.state.attached["same_cgroup_bind4"] = struct{}{}
 	t.faults.detach["same_cgroup_bind4"] = errWorldRemove
 
@@ -428,7 +428,7 @@ func TestAppLoad_StatefulSuccessMounted(tt *testing.T) {
 
 	t.Nil(t.App.Load())
 	t.True(t.state.mounted)
-	_, err := fs.Stat(t.state.fs, trimRoot(internal.BPFDir))
+	_, err := fs.Stat(t.state.fs, trimWorldRoot(internal.BPFDir))
 	t.Nil(err)
 	t.assertAttachedAll()
 	t.Len(t.state.tempFiles, 0)
@@ -441,7 +441,7 @@ func TestAppLoad_StatefulSuccessMountFresh(tt *testing.T) {
 
 	t.Nil(t.App.Load())
 	t.True(t.state.mounted)
-	_, err := fs.Stat(t.state.fs, trimRoot(internal.BPFDir))
+	_, err := fs.Stat(t.state.fs, trimWorldRoot(internal.BPFDir))
 	t.Nil(err)
 	t.assertAttachedAll()
 }
@@ -462,7 +462,7 @@ func TestAppUnload_StatefulWithoutBPF(tt *testing.T) {
 func TestAppUnload_StatefulWithBPF(tt *testing.T) {
 	tt.Parallel()
 	t := newStatefulAppTest(tt)
-	t.state.fs[trimRoot(internal.BPFDir)] = &fstest.MapFile{Mode: os.ModeDir | internal.BPFMode}
+	t.state.fs[trimWorldRoot(internal.BPFDir)] = &fstest.MapFile{Mode: os.ModeDir | internal.BPFMode}
 	for _, att := range internal.CgroupAttaches() {
 		t.state.attached[att.Name] = struct{}{}
 	}
@@ -474,7 +474,7 @@ func TestAppUnload_StatefulWithBPF(tt *testing.T) {
 func TestAppUnload_StatefulBPFDirExists(tt *testing.T) {
 	tt.Parallel()
 	t := newStatefulAppTest(tt)
-	t.state.fs[trimRoot(internal.BPFDir)] = &fstest.MapFile{Mode: os.ModeDir | internal.BPFMode}
+	t.state.fs[trimWorldRoot(internal.BPFDir)] = &fstest.MapFile{Mode: os.ModeDir | internal.BPFMode}
 	t.faults.removeAll = errWorldRemove
 
 	err := t.App.Unload()
