@@ -216,16 +216,15 @@ func (a *app) checkUnloaded() error {
 }
 
 func (a *app) isBPFMounted() bool {
-	return a.ExecCommand("mountpoint", "-q", BPFRoot).Run() == nil
+	return a.Mountpoint(BPFRoot) == nil
 }
 
 func (a *app) mountBPF() ([]byte, error) {
-	return a.ExecCommand("mount", "-t", "bpf", "bpf", BPFRoot).CombinedOutput()
+	return a.MountBPF("bpf", BPFRoot)
 }
 
 func (a *app) bpftoolLoadAll(bpfObjPath string) error {
-	args := []string{"prog", "loadall", bpfObjPath, BPFDir, "pinmaps", BPFDir + "/maps"}
-	out, err := a.ExecCommand("bpftool", args...).CombinedOutput()
+	out, err := a.BpftoolProgLoadAll(bpfObjPath, BPFDir, BPFDir+"/maps")
 	if err != nil {
 		return fmt.Errorf("bpftool loadall: %w\n%s", err, out)
 	}
@@ -233,13 +232,11 @@ func (a *app) bpftoolLoadAll(bpfObjPath string) error {
 }
 
 func (a *app) bpftoolAttach(attachType, progPin string) error {
-	args := []string{"cgroup", "attach", CgroupRoot, attachType, "pinned", progPin} //nolint:goconst // Leave "pinned" as is.
-	return a.ExecCommand("bpftool", args...).Run()
+	return a.BpftoolCgroupAttach(CgroupRoot, attachType, progPin)
 }
 
 func (a *app) bpftoolDetach(attachType, progPin string) error {
-	args := []string{"cgroup", "detach", CgroupRoot, attachType, "pinned", progPin}
-	return a.ExecCommand("bpftool", args...).Run()
+	return a.BpftoolCgroupDetach(CgroupRoot, attachType, progPin)
 }
 
 func (a *app) bpftoolMapUpdateMark(m Mark) error {
@@ -250,11 +247,11 @@ func (a *app) bpftoolMapUpdateMark(m Mark) error {
 		"key", "hex", "00", "00", "00", "00",
 		"value", "hex", leBytes[0], leBytes[1], leBytes[2], leBytes[3],
 	}
-	return a.ExecCommand("bpftool", args...).Run()
+	return a.BpftoolMapUpdate(args...)
 }
 
 func (a *app) bpftoolCgroupShow() ([]CgroupAttach, error) {
-	out, err := a.ExecCommand("bpftool", "--json", "cgroup", "show", CgroupRoot).Output()
+	out, err := a.BpftoolCgroupShow(CgroupRoot)
 	if err != nil {
 		// Ubuntu's linux-tools wrapper exits with code 2 when no programs
 		// are attached (the real bpftool returns empty stdout, exit 0).

@@ -13,7 +13,6 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/gobwas/glob"
 	"github.com/powerman/check"
 
 	"github.com/powerman/ebpf-same-cgroup-mark/internal"
@@ -38,34 +37,6 @@ var (
 // so they can be used as keys in fstest.MapFS.
 func trimRoot(p string) string { return strings.TrimLeft(p, "/") }
 
-// ExecCmd implements internal.WorldExecCmd.
-type ExecCmd struct {
-	run            func() error
-	combinedOutput func() ([]byte, error)
-	output         func() ([]byte, error)
-}
-
-func (c *ExecCmd) Run() error {
-	if c.run == nil {
-		panic("unexpected call to Run()")
-	}
-	return c.run()
-}
-
-func (c *ExecCmd) CombinedOutput() ([]byte, error) {
-	if c.combinedOutput == nil {
-		panic("unexpected call to CombinedOutput()")
-	}
-	return c.combinedOutput()
-}
-
-func (c *ExecCmd) Output() ([]byte, error) {
-	if c.output == nil {
-		panic("unexpected call to Output()")
-	}
-	return c.output()
-}
-
 // OsFile implements internal.WorldOsFile.
 type OsFile struct {
 	name  string
@@ -81,7 +52,6 @@ func (f *OsFile) Close() error                { return f.close() }
 // and OS method dispatch.
 type World struct {
 	*MockStubWorld
-	Cmds *MockStubWorldCmds
 
 	euid      int
 	FS        fstest.MapFS
@@ -99,32 +69,31 @@ func newWorld() *World {
 		Mounted:       true,
 		FS:            make(fstest.MapFS),
 	}
-	m.Cmds = NewMockStubWorldCmds()
 
-	m.Cmds.MountpointFunc.SetDefaultHook(func(dir string) error {
+	m.MountpointFunc.SetDefaultHook(func(dir string) error {
 		if m.Mounted {
 			return nil
 		}
 		return errNotMount
 	})
 
-	m.Cmds.MountBPFFunc.SetDefaultHook(func(fstype, target string) ([]byte, error) {
+	m.MountBPFFunc.SetDefaultHook(func(fstype, target string) ([]byte, error) {
 		m.Mounted = true
 		return nil, nil
 	})
 
-	m.Cmds.BpftoolProgLoadAllFunc.SetDefaultHook(func(bpfObjPath, bpffs, mapsDir string) ([]byte, error) {
+	m.BpftoolProgLoadAllFunc.SetDefaultHook(func(bpfObjPath, bpffs, mapsDir string) ([]byte, error) {
 		m.FS[BPFDir] = &fstest.MapFile{Mode: os.ModeDir | internal.BPFMode}
 		return nil, nil
 	})
 
-	m.Cmds.BpftoolCgroupAttachFunc.SetDefaultHook(func(cgroup, attachType, progPin string) error {
+	m.BpftoolCgroupAttachFunc.SetDefaultHook(func(cgroup, attachType, progPin string) error {
 		att := internal.CgroupAttach{Name: filepath.Base(progPin), AttachType: attachType}
 		m.Attached = append(m.Attached, att)
 		return nil
 	})
 
-	m.Cmds.BpftoolCgroupDetachFunc.SetDefaultHook(func(cgroup, attachType, progPin string) error {
+	m.BpftoolCgroupDetachFunc.SetDefaultHook(func(cgroup, attachType, progPin string) error {
 		att := internal.CgroupAttach{Name: filepath.Base(progPin), AttachType: attachType}
 		if i := slices.Index(m.Attached, att); i != -1 {
 			m.Attached = slices.Delete(m.Attached, i, i+1)
@@ -132,13 +101,13 @@ func newWorld() *World {
 		return nil
 	})
 
-	m.Cmds.BpftoolMapUpdateFunc.SetDefaultHook(func(args ...string) error {
+	m.BpftoolMapUpdateFunc.SetDefaultHook(func(args ...string) error {
 		last := len(args) - 4
 		m.markBytes = [4]string{args[last], args[last+1], args[last+2], args[last+3]}
 		return nil
 	})
 
-	m.Cmds.BpftoolCgroupShowFunc.SetDefaultHook(func(cgroup string) ([]byte, error) {
+	m.BpftoolCgroupShowFunc.SetDefaultHook(func(cgroup string) ([]byte, error) {
 		return json.Marshal(m.Attached)
 	})
 
@@ -183,51 +152,6 @@ func newWorld() *World {
 	})
 
 	return m
-}
-
-// ExecCommand dispatches to typed go-mockgen methods via command-line matching.
-// Each command's effect is deferred to the run/Output/CombinedOutput closure.
-func (m *World) ExecCommand(name string, args ...string) internal.WorldExecCmd {
-	cmdline := strings.Join(append([]string{name}, args...), " ")
-	switch {
-	case cmdline == "mountpoint -q /sys/fs/bpf":
-		return &ExecCmd{
-			run: func() error { return m.Cmds.Mountpoint(internal.BPFRoot) },
-		}
-
-	case cmdline == "mount -t bpf bpf /sys/fs/bpf":
-		return &ExecCmd{
-			combinedOutput: func() ([]byte, error) { return m.Cmds.MountBPF("bpf", internal.BPFRoot) },
-		}
-
-	case glob.MustCompile("bpftool prog loadall * "+internal.BPFDir+" pinmaps "+internal.BPFDir+"/maps", ' ').Match(cmdline):
-		return &ExecCmd{
-			combinedOutput: func() ([]byte, error) { return m.Cmds.BpftoolProgLoadAll(args[2], args[3], args[5]) },
-		}
-
-	case glob.MustCompile("bpftool cgroup attach /sys/fs/cgroup * pinned *", ' ').Match(cmdline):
-		return &ExecCmd{
-			run: func() error { return m.Cmds.BpftoolCgroupAttach(args[2], args[3], args[5]) },
-		}
-
-	case glob.MustCompile("bpftool cgroup detach /sys/fs/cgroup * pinned *", ' ').Match(cmdline):
-		return &ExecCmd{
-			run: func() error { return m.Cmds.BpftoolCgroupDetach(args[2], args[3], args[5]) },
-		}
-
-	case glob.MustCompile("bpftool map update pinned /sys/fs/bpf/same-cgroup-mark/maps/same_cgroup_mark_cfg key hex 00 00 00 00 value hex * * * *", ' ').Match(cmdline):
-		return &ExecCmd{
-			run: func() error { return m.Cmds.BpftoolMapUpdate(args...) },
-		}
-
-	case cmdline == "bpftool --json cgroup show /sys/fs/cgroup":
-		return &ExecCmd{
-			output: func() ([]byte, error) { return m.Cmds.BpftoolCgroupShow(internal.CgroupRoot) },
-		}
-
-	default:
-		panic(fmt.Sprintf("unexpected command: %s", cmdline))
-	}
 }
 
 type AppTest struct {
@@ -283,8 +207,8 @@ func testDoFailures(t *testing.T, f func(t *AppTest) error) {
 		tt.Parallel()
 		t := newAppTest(tt)
 		t.World.Mounted = false
-		t.World.Cmds.MountpointFunc.PushReturn(errNotMount)
-		t.World.Cmds.MountBPFFunc.PushReturn([]byte("mount failure details"), errMountFailed)
+		t.World.MountpointFunc.PushReturn(errNotMount)
+		t.World.MountBPFFunc.PushReturn([]byte("mount failure details"), errMountFailed)
 		t.Err(f(t), errMountFailed)
 	})
 }
@@ -337,12 +261,10 @@ func TestAppLoad_CleanupPreviousStateError(tt *testing.T) {
 	t := newAppTest(tt)
 
 	// Simulate previous Load state.
-	t.World.ExecCommand("bpftool", "prog", "loadall", "fake.bpf.o",
-		internal.BPFDir, "pinmaps", internal.BPFDir+"/maps").CombinedOutput()
-	t.World.ExecCommand("bpftool", "cgroup", "attach", internal.CgroupRoot,
-		"cgroup_inet4_bind", "pinned", internal.BPFDir+"/same_cgroup_bind4").Run()
+	t.World.BpftoolProgLoadAll("fake.bpf.o", internal.BPFDir, internal.BPFDir+"/maps")
+	t.World.BpftoolCgroupAttach(internal.CgroupRoot, "cgroup_inet4_bind", internal.BPFDir+"/same_cgroup_bind4")
 
-	t.World.Cmds.BpftoolCgroupDetachFunc.PushReturn(errRemove)
+	t.World.BpftoolCgroupDetachFunc.PushReturn(errRemove)
 
 	err := t.App.Load()
 	t.Match(err, "cleanup previous state: BPF program still attached to cgroup: same_cgroup_bind4")
@@ -352,7 +274,7 @@ func TestAppLoad_LoadallError(tt *testing.T) {
 	tt.Parallel()
 	t := newAppTest(tt)
 
-	t.World.Cmds.BpftoolProgLoadAllFunc.PushReturn(nil, errLoadall)
+	t.World.BpftoolProgLoadAllFunc.PushReturn(nil, errLoadall)
 
 	err := t.App.Load()
 	t.Err(err, errLoadall)
@@ -364,9 +286,9 @@ func TestAppLoad_AttachErrorRollsBack(tt *testing.T) {
 	t := newAppTest(tt)
 
 	for range len(internal.CgroupAttaches()) - 1 {
-		t.World.Cmds.BpftoolCgroupAttachFunc.PushReturn(nil)
+		t.World.BpftoolCgroupAttachFunc.PushReturn(nil)
 	}
-	t.World.Cmds.BpftoolCgroupAttachFunc.PushReturn(errAttach)
+	t.World.BpftoolCgroupAttachFunc.PushReturn(errAttach)
 
 	err := t.App.Load()
 	t.Err(err, errAttach)
@@ -408,11 +330,9 @@ func TestAppUnload_WithoutBPF(tt *testing.T) {
 func TestAppUnload_WithBPF(tt *testing.T) {
 	tt.Parallel()
 	t := newAppTest(tt)
-	t.World.ExecCommand("bpftool", "prog", "loadall", "fake.bpf.o",
-		internal.BPFDir, "pinmaps", internal.BPFDir+"/maps").CombinedOutput()
+	t.World.BpftoolProgLoadAll("fake.bpf.o", internal.BPFDir, internal.BPFDir+"/maps")
 	for _, att := range internal.CgroupAttaches() {
-		t.World.ExecCommand("bpftool", "cgroup", "attach", internal.CgroupRoot,
-			att.AttachType, "pinned", internal.BPFDir+"/"+att.Name).Run()
+		t.World.BpftoolCgroupAttach(internal.CgroupRoot, att.AttachType, internal.BPFDir+"/"+att.Name)
 	}
 
 	t.Nil(t.App.Unload())
@@ -461,7 +381,7 @@ func TestAppUnload_CgroupShow(t *testing.T) {
 		t.Run(tc.name, func(tt *testing.T) {
 			tt.Parallel()
 			t := newAppTest(tt)
-			t.World.Cmds.BpftoolCgroupShowFunc.PushReturn(tc.ret, tc.retErr)
+			t.World.BpftoolCgroupShowFunc.PushReturn(tc.ret, tc.retErr)
 			err := t.App.Unload()
 			if tc.wantErr != "" {
 				t.Match(err, tc.wantErr)
@@ -489,7 +409,7 @@ func TestAppSetMark_Error(tt *testing.T) {
 	tt.Parallel()
 	t := newAppTest(tt)
 
-	t.World.Cmds.BpftoolMapUpdateFunc.PushReturn(errBpftool)
+	t.World.BpftoolMapUpdateFunc.PushReturn(errBpftool)
 
 	err := t.App.SetMark(internal.Mark(0x10000000))
 	t.Match(err, "bpftool map update")

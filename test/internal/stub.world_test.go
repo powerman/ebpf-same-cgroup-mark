@@ -13,9 +13,27 @@ import (
 // package github.com/powerman/ebpf-same-cgroup-mark/internal) used for unit
 // testing.
 type MockStubWorld struct {
-	// ExecCommandFunc is an instance of a mock function object controlling
-	// the behavior of the method ExecCommand.
-	ExecCommandFunc *StubWorldExecCommandFunc
+	// BpftoolCgroupAttachFunc is an instance of a mock function object
+	// controlling the behavior of the method BpftoolCgroupAttach.
+	BpftoolCgroupAttachFunc *StubWorldBpftoolCgroupAttachFunc
+	// BpftoolCgroupDetachFunc is an instance of a mock function object
+	// controlling the behavior of the method BpftoolCgroupDetach.
+	BpftoolCgroupDetachFunc *StubWorldBpftoolCgroupDetachFunc
+	// BpftoolCgroupShowFunc is an instance of a mock function object
+	// controlling the behavior of the method BpftoolCgroupShow.
+	BpftoolCgroupShowFunc *StubWorldBpftoolCgroupShowFunc
+	// BpftoolMapUpdateFunc is an instance of a mock function object
+	// controlling the behavior of the method BpftoolMapUpdate.
+	BpftoolMapUpdateFunc *StubWorldBpftoolMapUpdateFunc
+	// BpftoolProgLoadAllFunc is an instance of a mock function object
+	// controlling the behavior of the method BpftoolProgLoadAll.
+	BpftoolProgLoadAllFunc *StubWorldBpftoolProgLoadAllFunc
+	// MountBPFFunc is an instance of a mock function object controlling the
+	// behavior of the method MountBPF.
+	MountBPFFunc *StubWorldMountBPFFunc
+	// MountpointFunc is an instance of a mock function object controlling
+	// the behavior of the method Mountpoint.
+	MountpointFunc *StubWorldMountpointFunc
 	// OsCreateTempFunc is an instance of a mock function object controlling
 	// the behavior of the method OsCreateTemp.
 	OsCreateTempFunc *StubWorldOsCreateTempFunc
@@ -40,8 +58,38 @@ type MockStubWorld struct {
 // return zero values for all results, unless overwritten.
 func NewMockStubWorld() *MockStubWorld {
 	return &MockStubWorld{
-		ExecCommandFunc: &StubWorldExecCommandFunc{
-			defaultHook: func(string, ...string) (r0 internal.WorldExecCmd) {
+		BpftoolCgroupAttachFunc: &StubWorldBpftoolCgroupAttachFunc{
+			defaultHook: func(string, string, string) (r0 error) {
+				return
+			},
+		},
+		BpftoolCgroupDetachFunc: &StubWorldBpftoolCgroupDetachFunc{
+			defaultHook: func(string, string, string) (r0 error) {
+				return
+			},
+		},
+		BpftoolCgroupShowFunc: &StubWorldBpftoolCgroupShowFunc{
+			defaultHook: func(string) (r0 []byte, r1 error) {
+				return
+			},
+		},
+		BpftoolMapUpdateFunc: &StubWorldBpftoolMapUpdateFunc{
+			defaultHook: func(...string) (r0 error) {
+				return
+			},
+		},
+		BpftoolProgLoadAllFunc: &StubWorldBpftoolProgLoadAllFunc{
+			defaultHook: func(string, string, string) (r0 []byte, r1 error) {
+				return
+			},
+		},
+		MountBPFFunc: &StubWorldMountBPFFunc{
+			defaultHook: func(string, string) (r0 []byte, r1 error) {
+				return
+			},
+		},
+		MountpointFunc: &StubWorldMountpointFunc{
+			defaultHook: func(string) (r0 error) {
 				return
 			},
 		},
@@ -82,9 +130,39 @@ func NewMockStubWorld() *MockStubWorld {
 // methods panic on invocation, unless overwritten.
 func NewStrictMockStubWorld() *MockStubWorld {
 	return &MockStubWorld{
-		ExecCommandFunc: &StubWorldExecCommandFunc{
-			defaultHook: func(string, ...string) internal.WorldExecCmd {
-				panic("unexpected invocation of MockStubWorld.ExecCommand")
+		BpftoolCgroupAttachFunc: &StubWorldBpftoolCgroupAttachFunc{
+			defaultHook: func(string, string, string) error {
+				panic("unexpected invocation of MockStubWorld.BpftoolCgroupAttach")
+			},
+		},
+		BpftoolCgroupDetachFunc: &StubWorldBpftoolCgroupDetachFunc{
+			defaultHook: func(string, string, string) error {
+				panic("unexpected invocation of MockStubWorld.BpftoolCgroupDetach")
+			},
+		},
+		BpftoolCgroupShowFunc: &StubWorldBpftoolCgroupShowFunc{
+			defaultHook: func(string) ([]byte, error) {
+				panic("unexpected invocation of MockStubWorld.BpftoolCgroupShow")
+			},
+		},
+		BpftoolMapUpdateFunc: &StubWorldBpftoolMapUpdateFunc{
+			defaultHook: func(...string) error {
+				panic("unexpected invocation of MockStubWorld.BpftoolMapUpdate")
+			},
+		},
+		BpftoolProgLoadAllFunc: &StubWorldBpftoolProgLoadAllFunc{
+			defaultHook: func(string, string, string) ([]byte, error) {
+				panic("unexpected invocation of MockStubWorld.BpftoolProgLoadAll")
+			},
+		},
+		MountBPFFunc: &StubWorldMountBPFFunc{
+			defaultHook: func(string, string) ([]byte, error) {
+				panic("unexpected invocation of MockStubWorld.MountBPF")
+			},
+		},
+		MountpointFunc: &StubWorldMountpointFunc{
+			defaultHook: func(string) error {
+				panic("unexpected invocation of MockStubWorld.Mountpoint")
 			},
 		},
 		OsCreateTempFunc: &StubWorldOsCreateTempFunc{
@@ -124,8 +202,26 @@ func NewStrictMockStubWorld() *MockStubWorld {
 // All methods delegate to the given implementation, unless overwritten.
 func NewMockStubWorldFrom(i internal.World) *MockStubWorld {
 	return &MockStubWorld{
-		ExecCommandFunc: &StubWorldExecCommandFunc{
-			defaultHook: i.ExecCommand,
+		BpftoolCgroupAttachFunc: &StubWorldBpftoolCgroupAttachFunc{
+			defaultHook: i.BpftoolCgroupAttach,
+		},
+		BpftoolCgroupDetachFunc: &StubWorldBpftoolCgroupDetachFunc{
+			defaultHook: i.BpftoolCgroupDetach,
+		},
+		BpftoolCgroupShowFunc: &StubWorldBpftoolCgroupShowFunc{
+			defaultHook: i.BpftoolCgroupShow,
+		},
+		BpftoolMapUpdateFunc: &StubWorldBpftoolMapUpdateFunc{
+			defaultHook: i.BpftoolMapUpdate,
+		},
+		BpftoolProgLoadAllFunc: &StubWorldBpftoolProgLoadAllFunc{
+			defaultHook: i.BpftoolProgLoadAll,
+		},
+		MountBPFFunc: &StubWorldMountBPFFunc{
+			defaultHook: i.MountBPF,
+		},
+		MountpointFunc: &StubWorldMountpointFunc{
+			defaultHook: i.Mountpoint,
 		},
 		OsCreateTempFunc: &StubWorldOsCreateTempFunc{
 			defaultHook: i.OsCreateTemp,
@@ -148,35 +244,36 @@ func NewMockStubWorldFrom(i internal.World) *MockStubWorld {
 	}
 }
 
-// StubWorldExecCommandFunc describes the behavior when the ExecCommand
-// method of the parent MockStubWorld instance is invoked.
-type StubWorldExecCommandFunc struct {
-	defaultHook func(string, ...string) internal.WorldExecCmd
-	hooks       []func(string, ...string) internal.WorldExecCmd
-	history     []StubWorldExecCommandFuncCall
+// StubWorldBpftoolCgroupAttachFunc describes the behavior when the
+// BpftoolCgroupAttach method of the parent MockStubWorld instance is
+// invoked.
+type StubWorldBpftoolCgroupAttachFunc struct {
+	defaultHook func(string, string, string) error
+	hooks       []func(string, string, string) error
+	history     []StubWorldBpftoolCgroupAttachFuncCall
 	mutex       sync.Mutex
 }
 
-// ExecCommand delegates to the next hook function in the queue and stores
-// the parameter and result values of this invocation.
-func (m *MockStubWorld) ExecCommand(v0 string, v1 ...string) internal.WorldExecCmd {
-	r0 := m.ExecCommandFunc.nextHook()(v0, v1...)
-	m.ExecCommandFunc.appendCall(StubWorldExecCommandFuncCall{v0, v1, r0})
+// BpftoolCgroupAttach delegates to the next hook function in the queue and
+// stores the parameter and result values of this invocation.
+func (m *MockStubWorld) BpftoolCgroupAttach(v0 string, v1 string, v2 string) error {
+	r0 := m.BpftoolCgroupAttachFunc.nextHook()(v0, v1, v2)
+	m.BpftoolCgroupAttachFunc.appendCall(StubWorldBpftoolCgroupAttachFuncCall{v0, v1, v2, r0})
 	return r0
 }
 
-// SetDefaultHook sets function that is called when the ExecCommand method
-// of the parent MockStubWorld instance is invoked and the hook queue is
-// empty.
-func (f *StubWorldExecCommandFunc) SetDefaultHook(hook func(string, ...string) internal.WorldExecCmd) {
+// SetDefaultHook sets function that is called when the BpftoolCgroupAttach
+// method of the parent MockStubWorld instance is invoked and the hook queue
+// is empty.
+func (f *StubWorldBpftoolCgroupAttachFunc) SetDefaultHook(hook func(string, string, string) error) {
 	f.defaultHook = hook
 }
 
 // PushHook adds a function to the end of hook queue. Each invocation of the
-// ExecCommand method of the parent MockStubWorld instance invokes the hook
-// at the front of the queue and discards it. After the queue is empty, the
-// default hook function is invoked for any future action.
-func (f *StubWorldExecCommandFunc) PushHook(hook func(string, ...string) internal.WorldExecCmd) {
+// BpftoolCgroupAttach method of the parent MockStubWorld instance invokes
+// the hook at the front of the queue and discards it. After the queue is
+// empty, the default hook function is invoked for any future action.
+func (f *StubWorldBpftoolCgroupAttachFunc) PushHook(hook func(string, string, string) error) {
 	f.mutex.Lock()
 	f.hooks = append(f.hooks, hook)
 	f.mutex.Unlock()
@@ -184,20 +281,20 @@ func (f *StubWorldExecCommandFunc) PushHook(hook func(string, ...string) interna
 
 // SetDefaultReturn calls SetDefaultHook with a function that returns the
 // given values.
-func (f *StubWorldExecCommandFunc) SetDefaultReturn(r0 internal.WorldExecCmd) {
-	f.SetDefaultHook(func(string, ...string) internal.WorldExecCmd {
+func (f *StubWorldBpftoolCgroupAttachFunc) SetDefaultReturn(r0 error) {
+	f.SetDefaultHook(func(string, string, string) error {
 		return r0
 	})
 }
 
 // PushReturn calls PushHook with a function that returns the given values.
-func (f *StubWorldExecCommandFunc) PushReturn(r0 internal.WorldExecCmd) {
-	f.PushHook(func(string, ...string) internal.WorldExecCmd {
+func (f *StubWorldBpftoolCgroupAttachFunc) PushReturn(r0 error) {
+	f.PushHook(func(string, string, string) error {
 		return r0
 	})
 }
 
-func (f *StubWorldExecCommandFunc) nextHook() func(string, ...string) internal.WorldExecCmd {
+func (f *StubWorldBpftoolCgroupAttachFunc) nextHook() func(string, string, string) error {
 	f.mutex.Lock()
 	defer f.mutex.Unlock()
 
@@ -210,53 +307,692 @@ func (f *StubWorldExecCommandFunc) nextHook() func(string, ...string) internal.W
 	return hook
 }
 
-func (f *StubWorldExecCommandFunc) appendCall(r0 StubWorldExecCommandFuncCall) {
+func (f *StubWorldBpftoolCgroupAttachFunc) appendCall(r0 StubWorldBpftoolCgroupAttachFuncCall) {
 	f.mutex.Lock()
 	f.history = append(f.history, r0)
 	f.mutex.Unlock()
 }
 
-// History returns a sequence of StubWorldExecCommandFuncCall objects
-// describing the invocations of this function.
-func (f *StubWorldExecCommandFunc) History() []StubWorldExecCommandFuncCall {
+// History returns a sequence of StubWorldBpftoolCgroupAttachFuncCall
+// objects describing the invocations of this function.
+func (f *StubWorldBpftoolCgroupAttachFunc) History() []StubWorldBpftoolCgroupAttachFuncCall {
 	f.mutex.Lock()
-	history := make([]StubWorldExecCommandFuncCall, len(f.history))
+	history := make([]StubWorldBpftoolCgroupAttachFuncCall, len(f.history))
 	copy(history, f.history)
 	f.mutex.Unlock()
 
 	return history
 }
 
-// StubWorldExecCommandFuncCall is an object that describes an invocation of
-// method ExecCommand on an instance of MockStubWorld.
-type StubWorldExecCommandFuncCall struct {
+// StubWorldBpftoolCgroupAttachFuncCall is an object that describes an
+// invocation of method BpftoolCgroupAttach on an instance of MockStubWorld.
+type StubWorldBpftoolCgroupAttachFuncCall struct {
 	// Arg0 is the value of the 1st argument passed to this method
 	// invocation.
 	Arg0 string
-	// Arg1 is a slice containing the values of the variadic arguments
-	// passed to this method invocation.
-	Arg1 []string
+	// Arg1 is the value of the 2nd argument passed to this method
+	// invocation.
+	Arg1 string
+	// Arg2 is the value of the 3rd argument passed to this method
+	// invocation.
+	Arg2 string
 	// Result0 is the value of the 1st result returned from this method
 	// invocation.
-	Result0 internal.WorldExecCmd
+	Result0 error
+}
+
+// Args returns an interface slice containing the arguments of this
+// invocation.
+func (c StubWorldBpftoolCgroupAttachFuncCall) Args() []interface{} {
+	return []interface{}{c.Arg0, c.Arg1, c.Arg2}
+}
+
+// Results returns an interface slice containing the results of this
+// invocation.
+func (c StubWorldBpftoolCgroupAttachFuncCall) Results() []interface{} {
+	return []interface{}{c.Result0}
+}
+
+// StubWorldBpftoolCgroupDetachFunc describes the behavior when the
+// BpftoolCgroupDetach method of the parent MockStubWorld instance is
+// invoked.
+type StubWorldBpftoolCgroupDetachFunc struct {
+	defaultHook func(string, string, string) error
+	hooks       []func(string, string, string) error
+	history     []StubWorldBpftoolCgroupDetachFuncCall
+	mutex       sync.Mutex
+}
+
+// BpftoolCgroupDetach delegates to the next hook function in the queue and
+// stores the parameter and result values of this invocation.
+func (m *MockStubWorld) BpftoolCgroupDetach(v0 string, v1 string, v2 string) error {
+	r0 := m.BpftoolCgroupDetachFunc.nextHook()(v0, v1, v2)
+	m.BpftoolCgroupDetachFunc.appendCall(StubWorldBpftoolCgroupDetachFuncCall{v0, v1, v2, r0})
+	return r0
+}
+
+// SetDefaultHook sets function that is called when the BpftoolCgroupDetach
+// method of the parent MockStubWorld instance is invoked and the hook queue
+// is empty.
+func (f *StubWorldBpftoolCgroupDetachFunc) SetDefaultHook(hook func(string, string, string) error) {
+	f.defaultHook = hook
+}
+
+// PushHook adds a function to the end of hook queue. Each invocation of the
+// BpftoolCgroupDetach method of the parent MockStubWorld instance invokes
+// the hook at the front of the queue and discards it. After the queue is
+// empty, the default hook function is invoked for any future action.
+func (f *StubWorldBpftoolCgroupDetachFunc) PushHook(hook func(string, string, string) error) {
+	f.mutex.Lock()
+	f.hooks = append(f.hooks, hook)
+	f.mutex.Unlock()
+}
+
+// SetDefaultReturn calls SetDefaultHook with a function that returns the
+// given values.
+func (f *StubWorldBpftoolCgroupDetachFunc) SetDefaultReturn(r0 error) {
+	f.SetDefaultHook(func(string, string, string) error {
+		return r0
+	})
+}
+
+// PushReturn calls PushHook with a function that returns the given values.
+func (f *StubWorldBpftoolCgroupDetachFunc) PushReturn(r0 error) {
+	f.PushHook(func(string, string, string) error {
+		return r0
+	})
+}
+
+func (f *StubWorldBpftoolCgroupDetachFunc) nextHook() func(string, string, string) error {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
+
+	if len(f.hooks) == 0 {
+		return f.defaultHook
+	}
+
+	hook := f.hooks[0]
+	f.hooks = f.hooks[1:]
+	return hook
+}
+
+func (f *StubWorldBpftoolCgroupDetachFunc) appendCall(r0 StubWorldBpftoolCgroupDetachFuncCall) {
+	f.mutex.Lock()
+	f.history = append(f.history, r0)
+	f.mutex.Unlock()
+}
+
+// History returns a sequence of StubWorldBpftoolCgroupDetachFuncCall
+// objects describing the invocations of this function.
+func (f *StubWorldBpftoolCgroupDetachFunc) History() []StubWorldBpftoolCgroupDetachFuncCall {
+	f.mutex.Lock()
+	history := make([]StubWorldBpftoolCgroupDetachFuncCall, len(f.history))
+	copy(history, f.history)
+	f.mutex.Unlock()
+
+	return history
+}
+
+// StubWorldBpftoolCgroupDetachFuncCall is an object that describes an
+// invocation of method BpftoolCgroupDetach on an instance of MockStubWorld.
+type StubWorldBpftoolCgroupDetachFuncCall struct {
+	// Arg0 is the value of the 1st argument passed to this method
+	// invocation.
+	Arg0 string
+	// Arg1 is the value of the 2nd argument passed to this method
+	// invocation.
+	Arg1 string
+	// Arg2 is the value of the 3rd argument passed to this method
+	// invocation.
+	Arg2 string
+	// Result0 is the value of the 1st result returned from this method
+	// invocation.
+	Result0 error
+}
+
+// Args returns an interface slice containing the arguments of this
+// invocation.
+func (c StubWorldBpftoolCgroupDetachFuncCall) Args() []interface{} {
+	return []interface{}{c.Arg0, c.Arg1, c.Arg2}
+}
+
+// Results returns an interface slice containing the results of this
+// invocation.
+func (c StubWorldBpftoolCgroupDetachFuncCall) Results() []interface{} {
+	return []interface{}{c.Result0}
+}
+
+// StubWorldBpftoolCgroupShowFunc describes the behavior when the
+// BpftoolCgroupShow method of the parent MockStubWorld instance is invoked.
+type StubWorldBpftoolCgroupShowFunc struct {
+	defaultHook func(string) ([]byte, error)
+	hooks       []func(string) ([]byte, error)
+	history     []StubWorldBpftoolCgroupShowFuncCall
+	mutex       sync.Mutex
+}
+
+// BpftoolCgroupShow delegates to the next hook function in the queue and
+// stores the parameter and result values of this invocation.
+func (m *MockStubWorld) BpftoolCgroupShow(v0 string) ([]byte, error) {
+	r0, r1 := m.BpftoolCgroupShowFunc.nextHook()(v0)
+	m.BpftoolCgroupShowFunc.appendCall(StubWorldBpftoolCgroupShowFuncCall{v0, r0, r1})
+	return r0, r1
+}
+
+// SetDefaultHook sets function that is called when the BpftoolCgroupShow
+// method of the parent MockStubWorld instance is invoked and the hook queue
+// is empty.
+func (f *StubWorldBpftoolCgroupShowFunc) SetDefaultHook(hook func(string) ([]byte, error)) {
+	f.defaultHook = hook
+}
+
+// PushHook adds a function to the end of hook queue. Each invocation of the
+// BpftoolCgroupShow method of the parent MockStubWorld instance invokes the
+// hook at the front of the queue and discards it. After the queue is empty,
+// the default hook function is invoked for any future action.
+func (f *StubWorldBpftoolCgroupShowFunc) PushHook(hook func(string) ([]byte, error)) {
+	f.mutex.Lock()
+	f.hooks = append(f.hooks, hook)
+	f.mutex.Unlock()
+}
+
+// SetDefaultReturn calls SetDefaultHook with a function that returns the
+// given values.
+func (f *StubWorldBpftoolCgroupShowFunc) SetDefaultReturn(r0 []byte, r1 error) {
+	f.SetDefaultHook(func(string) ([]byte, error) {
+		return r0, r1
+	})
+}
+
+// PushReturn calls PushHook with a function that returns the given values.
+func (f *StubWorldBpftoolCgroupShowFunc) PushReturn(r0 []byte, r1 error) {
+	f.PushHook(func(string) ([]byte, error) {
+		return r0, r1
+	})
+}
+
+func (f *StubWorldBpftoolCgroupShowFunc) nextHook() func(string) ([]byte, error) {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
+
+	if len(f.hooks) == 0 {
+		return f.defaultHook
+	}
+
+	hook := f.hooks[0]
+	f.hooks = f.hooks[1:]
+	return hook
+}
+
+func (f *StubWorldBpftoolCgroupShowFunc) appendCall(r0 StubWorldBpftoolCgroupShowFuncCall) {
+	f.mutex.Lock()
+	f.history = append(f.history, r0)
+	f.mutex.Unlock()
+}
+
+// History returns a sequence of StubWorldBpftoolCgroupShowFuncCall objects
+// describing the invocations of this function.
+func (f *StubWorldBpftoolCgroupShowFunc) History() []StubWorldBpftoolCgroupShowFuncCall {
+	f.mutex.Lock()
+	history := make([]StubWorldBpftoolCgroupShowFuncCall, len(f.history))
+	copy(history, f.history)
+	f.mutex.Unlock()
+
+	return history
+}
+
+// StubWorldBpftoolCgroupShowFuncCall is an object that describes an
+// invocation of method BpftoolCgroupShow on an instance of MockStubWorld.
+type StubWorldBpftoolCgroupShowFuncCall struct {
+	// Arg0 is the value of the 1st argument passed to this method
+	// invocation.
+	Arg0 string
+	// Result0 is the value of the 1st result returned from this method
+	// invocation.
+	Result0 []byte
+	// Result1 is the value of the 2nd result returned from this method
+	// invocation.
+	Result1 error
+}
+
+// Args returns an interface slice containing the arguments of this
+// invocation.
+func (c StubWorldBpftoolCgroupShowFuncCall) Args() []interface{} {
+	return []interface{}{c.Arg0}
+}
+
+// Results returns an interface slice containing the results of this
+// invocation.
+func (c StubWorldBpftoolCgroupShowFuncCall) Results() []interface{} {
+	return []interface{}{c.Result0, c.Result1}
+}
+
+// StubWorldBpftoolMapUpdateFunc describes the behavior when the
+// BpftoolMapUpdate method of the parent MockStubWorld instance is invoked.
+type StubWorldBpftoolMapUpdateFunc struct {
+	defaultHook func(...string) error
+	hooks       []func(...string) error
+	history     []StubWorldBpftoolMapUpdateFuncCall
+	mutex       sync.Mutex
+}
+
+// BpftoolMapUpdate delegates to the next hook function in the queue and
+// stores the parameter and result values of this invocation.
+func (m *MockStubWorld) BpftoolMapUpdate(v0 ...string) error {
+	r0 := m.BpftoolMapUpdateFunc.nextHook()(v0...)
+	m.BpftoolMapUpdateFunc.appendCall(StubWorldBpftoolMapUpdateFuncCall{v0, r0})
+	return r0
+}
+
+// SetDefaultHook sets function that is called when the BpftoolMapUpdate
+// method of the parent MockStubWorld instance is invoked and the hook queue
+// is empty.
+func (f *StubWorldBpftoolMapUpdateFunc) SetDefaultHook(hook func(...string) error) {
+	f.defaultHook = hook
+}
+
+// PushHook adds a function to the end of hook queue. Each invocation of the
+// BpftoolMapUpdate method of the parent MockStubWorld instance invokes the
+// hook at the front of the queue and discards it. After the queue is empty,
+// the default hook function is invoked for any future action.
+func (f *StubWorldBpftoolMapUpdateFunc) PushHook(hook func(...string) error) {
+	f.mutex.Lock()
+	f.hooks = append(f.hooks, hook)
+	f.mutex.Unlock()
+}
+
+// SetDefaultReturn calls SetDefaultHook with a function that returns the
+// given values.
+func (f *StubWorldBpftoolMapUpdateFunc) SetDefaultReturn(r0 error) {
+	f.SetDefaultHook(func(...string) error {
+		return r0
+	})
+}
+
+// PushReturn calls PushHook with a function that returns the given values.
+func (f *StubWorldBpftoolMapUpdateFunc) PushReturn(r0 error) {
+	f.PushHook(func(...string) error {
+		return r0
+	})
+}
+
+func (f *StubWorldBpftoolMapUpdateFunc) nextHook() func(...string) error {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
+
+	if len(f.hooks) == 0 {
+		return f.defaultHook
+	}
+
+	hook := f.hooks[0]
+	f.hooks = f.hooks[1:]
+	return hook
+}
+
+func (f *StubWorldBpftoolMapUpdateFunc) appendCall(r0 StubWorldBpftoolMapUpdateFuncCall) {
+	f.mutex.Lock()
+	f.history = append(f.history, r0)
+	f.mutex.Unlock()
+}
+
+// History returns a sequence of StubWorldBpftoolMapUpdateFuncCall objects
+// describing the invocations of this function.
+func (f *StubWorldBpftoolMapUpdateFunc) History() []StubWorldBpftoolMapUpdateFuncCall {
+	f.mutex.Lock()
+	history := make([]StubWorldBpftoolMapUpdateFuncCall, len(f.history))
+	copy(history, f.history)
+	f.mutex.Unlock()
+
+	return history
+}
+
+// StubWorldBpftoolMapUpdateFuncCall is an object that describes an
+// invocation of method BpftoolMapUpdate on an instance of MockStubWorld.
+type StubWorldBpftoolMapUpdateFuncCall struct {
+	// Arg0 is a slice containing the values of the variadic arguments
+	// passed to this method invocation.
+	Arg0 []string
+	// Result0 is the value of the 1st result returned from this method
+	// invocation.
+	Result0 error
 }
 
 // Args returns an interface slice containing the arguments of this
 // invocation. The variadic slice argument is flattened in this array such
 // that one positional argument and three variadic arguments would result in
 // a slice of four, not two.
-func (c StubWorldExecCommandFuncCall) Args() []interface{} {
+func (c StubWorldBpftoolMapUpdateFuncCall) Args() []interface{} {
 	trailing := []interface{}{}
-	for _, val := range c.Arg1 {
+	for _, val := range c.Arg0 {
 		trailing = append(trailing, val)
 	}
 
-	return append([]interface{}{c.Arg0}, trailing...)
+	return append([]interface{}{}, trailing...)
 }
 
 // Results returns an interface slice containing the results of this
 // invocation.
-func (c StubWorldExecCommandFuncCall) Results() []interface{} {
+func (c StubWorldBpftoolMapUpdateFuncCall) Results() []interface{} {
+	return []interface{}{c.Result0}
+}
+
+// StubWorldBpftoolProgLoadAllFunc describes the behavior when the
+// BpftoolProgLoadAll method of the parent MockStubWorld instance is
+// invoked.
+type StubWorldBpftoolProgLoadAllFunc struct {
+	defaultHook func(string, string, string) ([]byte, error)
+	hooks       []func(string, string, string) ([]byte, error)
+	history     []StubWorldBpftoolProgLoadAllFuncCall
+	mutex       sync.Mutex
+}
+
+// BpftoolProgLoadAll delegates to the next hook function in the queue and
+// stores the parameter and result values of this invocation.
+func (m *MockStubWorld) BpftoolProgLoadAll(v0 string, v1 string, v2 string) ([]byte, error) {
+	r0, r1 := m.BpftoolProgLoadAllFunc.nextHook()(v0, v1, v2)
+	m.BpftoolProgLoadAllFunc.appendCall(StubWorldBpftoolProgLoadAllFuncCall{v0, v1, v2, r0, r1})
+	return r0, r1
+}
+
+// SetDefaultHook sets function that is called when the BpftoolProgLoadAll
+// method of the parent MockStubWorld instance is invoked and the hook queue
+// is empty.
+func (f *StubWorldBpftoolProgLoadAllFunc) SetDefaultHook(hook func(string, string, string) ([]byte, error)) {
+	f.defaultHook = hook
+}
+
+// PushHook adds a function to the end of hook queue. Each invocation of the
+// BpftoolProgLoadAll method of the parent MockStubWorld instance invokes
+// the hook at the front of the queue and discards it. After the queue is
+// empty, the default hook function is invoked for any future action.
+func (f *StubWorldBpftoolProgLoadAllFunc) PushHook(hook func(string, string, string) ([]byte, error)) {
+	f.mutex.Lock()
+	f.hooks = append(f.hooks, hook)
+	f.mutex.Unlock()
+}
+
+// SetDefaultReturn calls SetDefaultHook with a function that returns the
+// given values.
+func (f *StubWorldBpftoolProgLoadAllFunc) SetDefaultReturn(r0 []byte, r1 error) {
+	f.SetDefaultHook(func(string, string, string) ([]byte, error) {
+		return r0, r1
+	})
+}
+
+// PushReturn calls PushHook with a function that returns the given values.
+func (f *StubWorldBpftoolProgLoadAllFunc) PushReturn(r0 []byte, r1 error) {
+	f.PushHook(func(string, string, string) ([]byte, error) {
+		return r0, r1
+	})
+}
+
+func (f *StubWorldBpftoolProgLoadAllFunc) nextHook() func(string, string, string) ([]byte, error) {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
+
+	if len(f.hooks) == 0 {
+		return f.defaultHook
+	}
+
+	hook := f.hooks[0]
+	f.hooks = f.hooks[1:]
+	return hook
+}
+
+func (f *StubWorldBpftoolProgLoadAllFunc) appendCall(r0 StubWorldBpftoolProgLoadAllFuncCall) {
+	f.mutex.Lock()
+	f.history = append(f.history, r0)
+	f.mutex.Unlock()
+}
+
+// History returns a sequence of StubWorldBpftoolProgLoadAllFuncCall objects
+// describing the invocations of this function.
+func (f *StubWorldBpftoolProgLoadAllFunc) History() []StubWorldBpftoolProgLoadAllFuncCall {
+	f.mutex.Lock()
+	history := make([]StubWorldBpftoolProgLoadAllFuncCall, len(f.history))
+	copy(history, f.history)
+	f.mutex.Unlock()
+
+	return history
+}
+
+// StubWorldBpftoolProgLoadAllFuncCall is an object that describes an
+// invocation of method BpftoolProgLoadAll on an instance of MockStubWorld.
+type StubWorldBpftoolProgLoadAllFuncCall struct {
+	// Arg0 is the value of the 1st argument passed to this method
+	// invocation.
+	Arg0 string
+	// Arg1 is the value of the 2nd argument passed to this method
+	// invocation.
+	Arg1 string
+	// Arg2 is the value of the 3rd argument passed to this method
+	// invocation.
+	Arg2 string
+	// Result0 is the value of the 1st result returned from this method
+	// invocation.
+	Result0 []byte
+	// Result1 is the value of the 2nd result returned from this method
+	// invocation.
+	Result1 error
+}
+
+// Args returns an interface slice containing the arguments of this
+// invocation.
+func (c StubWorldBpftoolProgLoadAllFuncCall) Args() []interface{} {
+	return []interface{}{c.Arg0, c.Arg1, c.Arg2}
+}
+
+// Results returns an interface slice containing the results of this
+// invocation.
+func (c StubWorldBpftoolProgLoadAllFuncCall) Results() []interface{} {
+	return []interface{}{c.Result0, c.Result1}
+}
+
+// StubWorldMountBPFFunc describes the behavior when the MountBPF method of
+// the parent MockStubWorld instance is invoked.
+type StubWorldMountBPFFunc struct {
+	defaultHook func(string, string) ([]byte, error)
+	hooks       []func(string, string) ([]byte, error)
+	history     []StubWorldMountBPFFuncCall
+	mutex       sync.Mutex
+}
+
+// MountBPF delegates to the next hook function in the queue and stores the
+// parameter and result values of this invocation.
+func (m *MockStubWorld) MountBPF(v0 string, v1 string) ([]byte, error) {
+	r0, r1 := m.MountBPFFunc.nextHook()(v0, v1)
+	m.MountBPFFunc.appendCall(StubWorldMountBPFFuncCall{v0, v1, r0, r1})
+	return r0, r1
+}
+
+// SetDefaultHook sets function that is called when the MountBPF method of
+// the parent MockStubWorld instance is invoked and the hook queue is empty.
+func (f *StubWorldMountBPFFunc) SetDefaultHook(hook func(string, string) ([]byte, error)) {
+	f.defaultHook = hook
+}
+
+// PushHook adds a function to the end of hook queue. Each invocation of the
+// MountBPF method of the parent MockStubWorld instance invokes the hook at
+// the front of the queue and discards it. After the queue is empty, the
+// default hook function is invoked for any future action.
+func (f *StubWorldMountBPFFunc) PushHook(hook func(string, string) ([]byte, error)) {
+	f.mutex.Lock()
+	f.hooks = append(f.hooks, hook)
+	f.mutex.Unlock()
+}
+
+// SetDefaultReturn calls SetDefaultHook with a function that returns the
+// given values.
+func (f *StubWorldMountBPFFunc) SetDefaultReturn(r0 []byte, r1 error) {
+	f.SetDefaultHook(func(string, string) ([]byte, error) {
+		return r0, r1
+	})
+}
+
+// PushReturn calls PushHook with a function that returns the given values.
+func (f *StubWorldMountBPFFunc) PushReturn(r0 []byte, r1 error) {
+	f.PushHook(func(string, string) ([]byte, error) {
+		return r0, r1
+	})
+}
+
+func (f *StubWorldMountBPFFunc) nextHook() func(string, string) ([]byte, error) {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
+
+	if len(f.hooks) == 0 {
+		return f.defaultHook
+	}
+
+	hook := f.hooks[0]
+	f.hooks = f.hooks[1:]
+	return hook
+}
+
+func (f *StubWorldMountBPFFunc) appendCall(r0 StubWorldMountBPFFuncCall) {
+	f.mutex.Lock()
+	f.history = append(f.history, r0)
+	f.mutex.Unlock()
+}
+
+// History returns a sequence of StubWorldMountBPFFuncCall objects
+// describing the invocations of this function.
+func (f *StubWorldMountBPFFunc) History() []StubWorldMountBPFFuncCall {
+	f.mutex.Lock()
+	history := make([]StubWorldMountBPFFuncCall, len(f.history))
+	copy(history, f.history)
+	f.mutex.Unlock()
+
+	return history
+}
+
+// StubWorldMountBPFFuncCall is an object that describes an invocation of
+// method MountBPF on an instance of MockStubWorld.
+type StubWorldMountBPFFuncCall struct {
+	// Arg0 is the value of the 1st argument passed to this method
+	// invocation.
+	Arg0 string
+	// Arg1 is the value of the 2nd argument passed to this method
+	// invocation.
+	Arg1 string
+	// Result0 is the value of the 1st result returned from this method
+	// invocation.
+	Result0 []byte
+	// Result1 is the value of the 2nd result returned from this method
+	// invocation.
+	Result1 error
+}
+
+// Args returns an interface slice containing the arguments of this
+// invocation.
+func (c StubWorldMountBPFFuncCall) Args() []interface{} {
+	return []interface{}{c.Arg0, c.Arg1}
+}
+
+// Results returns an interface slice containing the results of this
+// invocation.
+func (c StubWorldMountBPFFuncCall) Results() []interface{} {
+	return []interface{}{c.Result0, c.Result1}
+}
+
+// StubWorldMountpointFunc describes the behavior when the Mountpoint method
+// of the parent MockStubWorld instance is invoked.
+type StubWorldMountpointFunc struct {
+	defaultHook func(string) error
+	hooks       []func(string) error
+	history     []StubWorldMountpointFuncCall
+	mutex       sync.Mutex
+}
+
+// Mountpoint delegates to the next hook function in the queue and stores
+// the parameter and result values of this invocation.
+func (m *MockStubWorld) Mountpoint(v0 string) error {
+	r0 := m.MountpointFunc.nextHook()(v0)
+	m.MountpointFunc.appendCall(StubWorldMountpointFuncCall{v0, r0})
+	return r0
+}
+
+// SetDefaultHook sets function that is called when the Mountpoint method of
+// the parent MockStubWorld instance is invoked and the hook queue is empty.
+func (f *StubWorldMountpointFunc) SetDefaultHook(hook func(string) error) {
+	f.defaultHook = hook
+}
+
+// PushHook adds a function to the end of hook queue. Each invocation of the
+// Mountpoint method of the parent MockStubWorld instance invokes the hook
+// at the front of the queue and discards it. After the queue is empty, the
+// default hook function is invoked for any future action.
+func (f *StubWorldMountpointFunc) PushHook(hook func(string) error) {
+	f.mutex.Lock()
+	f.hooks = append(f.hooks, hook)
+	f.mutex.Unlock()
+}
+
+// SetDefaultReturn calls SetDefaultHook with a function that returns the
+// given values.
+func (f *StubWorldMountpointFunc) SetDefaultReturn(r0 error) {
+	f.SetDefaultHook(func(string) error {
+		return r0
+	})
+}
+
+// PushReturn calls PushHook with a function that returns the given values.
+func (f *StubWorldMountpointFunc) PushReturn(r0 error) {
+	f.PushHook(func(string) error {
+		return r0
+	})
+}
+
+func (f *StubWorldMountpointFunc) nextHook() func(string) error {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
+
+	if len(f.hooks) == 0 {
+		return f.defaultHook
+	}
+
+	hook := f.hooks[0]
+	f.hooks = f.hooks[1:]
+	return hook
+}
+
+func (f *StubWorldMountpointFunc) appendCall(r0 StubWorldMountpointFuncCall) {
+	f.mutex.Lock()
+	f.history = append(f.history, r0)
+	f.mutex.Unlock()
+}
+
+// History returns a sequence of StubWorldMountpointFuncCall objects
+// describing the invocations of this function.
+func (f *StubWorldMountpointFunc) History() []StubWorldMountpointFuncCall {
+	f.mutex.Lock()
+	history := make([]StubWorldMountpointFuncCall, len(f.history))
+	copy(history, f.history)
+	f.mutex.Unlock()
+
+	return history
+}
+
+// StubWorldMountpointFuncCall is an object that describes an invocation of
+// method Mountpoint on an instance of MockStubWorld.
+type StubWorldMountpointFuncCall struct {
+	// Arg0 is the value of the 1st argument passed to this method
+	// invocation.
+	Arg0 string
+	// Result0 is the value of the 1st result returned from this method
+	// invocation.
+	Result0 error
+}
+
+// Args returns an interface slice containing the arguments of this
+// invocation.
+func (c StubWorldMountpointFuncCall) Args() []interface{} {
+	return []interface{}{c.Arg0}
+}
+
+// Results returns an interface slice containing the results of this
+// invocation.
+func (c StubWorldMountpointFuncCall) Results() []interface{} {
 	return []interface{}{c.Result0}
 }
 
@@ -875,388 +1611,6 @@ func (c StubWorldOsStatFuncCall) Args() []interface{} {
 // invocation.
 func (c StubWorldOsStatFuncCall) Results() []interface{} {
 	return []interface{}{c.Result0, c.Result1}
-}
-
-// MockStubWorldExecCmd is a mock implementation of the WorldExecCmd
-// interface (from the package
-// github.com/powerman/ebpf-same-cgroup-mark/internal) used for unit
-// testing.
-type MockStubWorldExecCmd struct {
-	// CombinedOutputFunc is an instance of a mock function object
-	// controlling the behavior of the method CombinedOutput.
-	CombinedOutputFunc *StubWorldExecCmdCombinedOutputFunc
-	// OutputFunc is an instance of a mock function object controlling the
-	// behavior of the method Output.
-	OutputFunc *StubWorldExecCmdOutputFunc
-	// RunFunc is an instance of a mock function object controlling the
-	// behavior of the method Run.
-	RunFunc *StubWorldExecCmdRunFunc
-}
-
-// NewMockStubWorldExecCmd creates a new mock of the WorldExecCmd interface.
-// All methods return zero values for all results, unless overwritten.
-func NewMockStubWorldExecCmd() *MockStubWorldExecCmd {
-	return &MockStubWorldExecCmd{
-		CombinedOutputFunc: &StubWorldExecCmdCombinedOutputFunc{
-			defaultHook: func() (r0 []byte, r1 error) {
-				return
-			},
-		},
-		OutputFunc: &StubWorldExecCmdOutputFunc{
-			defaultHook: func() (r0 []byte, r1 error) {
-				return
-			},
-		},
-		RunFunc: &StubWorldExecCmdRunFunc{
-			defaultHook: func() (r0 error) {
-				return
-			},
-		},
-	}
-}
-
-// NewStrictMockStubWorldExecCmd creates a new mock of the WorldExecCmd
-// interface. All methods panic on invocation, unless overwritten.
-func NewStrictMockStubWorldExecCmd() *MockStubWorldExecCmd {
-	return &MockStubWorldExecCmd{
-		CombinedOutputFunc: &StubWorldExecCmdCombinedOutputFunc{
-			defaultHook: func() ([]byte, error) {
-				panic("unexpected invocation of MockStubWorldExecCmd.CombinedOutput")
-			},
-		},
-		OutputFunc: &StubWorldExecCmdOutputFunc{
-			defaultHook: func() ([]byte, error) {
-				panic("unexpected invocation of MockStubWorldExecCmd.Output")
-			},
-		},
-		RunFunc: &StubWorldExecCmdRunFunc{
-			defaultHook: func() error {
-				panic("unexpected invocation of MockStubWorldExecCmd.Run")
-			},
-		},
-	}
-}
-
-// NewMockStubWorldExecCmdFrom creates a new mock of the
-// MockStubWorldExecCmd interface. All methods delegate to the given
-// implementation, unless overwritten.
-func NewMockStubWorldExecCmdFrom(i internal.WorldExecCmd) *MockStubWorldExecCmd {
-	return &MockStubWorldExecCmd{
-		CombinedOutputFunc: &StubWorldExecCmdCombinedOutputFunc{
-			defaultHook: i.CombinedOutput,
-		},
-		OutputFunc: &StubWorldExecCmdOutputFunc{
-			defaultHook: i.Output,
-		},
-		RunFunc: &StubWorldExecCmdRunFunc{
-			defaultHook: i.Run,
-		},
-	}
-}
-
-// StubWorldExecCmdCombinedOutputFunc describes the behavior when the
-// CombinedOutput method of the parent MockStubWorldExecCmd instance is
-// invoked.
-type StubWorldExecCmdCombinedOutputFunc struct {
-	defaultHook func() ([]byte, error)
-	hooks       []func() ([]byte, error)
-	history     []StubWorldExecCmdCombinedOutputFuncCall
-	mutex       sync.Mutex
-}
-
-// CombinedOutput delegates to the next hook function in the queue and
-// stores the parameter and result values of this invocation.
-func (m *MockStubWorldExecCmd) CombinedOutput() ([]byte, error) {
-	r0, r1 := m.CombinedOutputFunc.nextHook()()
-	m.CombinedOutputFunc.appendCall(StubWorldExecCmdCombinedOutputFuncCall{r0, r1})
-	return r0, r1
-}
-
-// SetDefaultHook sets function that is called when the CombinedOutput
-// method of the parent MockStubWorldExecCmd instance is invoked and the
-// hook queue is empty.
-func (f *StubWorldExecCmdCombinedOutputFunc) SetDefaultHook(hook func() ([]byte, error)) {
-	f.defaultHook = hook
-}
-
-// PushHook adds a function to the end of hook queue. Each invocation of the
-// CombinedOutput method of the parent MockStubWorldExecCmd instance invokes
-// the hook at the front of the queue and discards it. After the queue is
-// empty, the default hook function is invoked for any future action.
-func (f *StubWorldExecCmdCombinedOutputFunc) PushHook(hook func() ([]byte, error)) {
-	f.mutex.Lock()
-	f.hooks = append(f.hooks, hook)
-	f.mutex.Unlock()
-}
-
-// SetDefaultReturn calls SetDefaultHook with a function that returns the
-// given values.
-func (f *StubWorldExecCmdCombinedOutputFunc) SetDefaultReturn(r0 []byte, r1 error) {
-	f.SetDefaultHook(func() ([]byte, error) {
-		return r0, r1
-	})
-}
-
-// PushReturn calls PushHook with a function that returns the given values.
-func (f *StubWorldExecCmdCombinedOutputFunc) PushReturn(r0 []byte, r1 error) {
-	f.PushHook(func() ([]byte, error) {
-		return r0, r1
-	})
-}
-
-func (f *StubWorldExecCmdCombinedOutputFunc) nextHook() func() ([]byte, error) {
-	f.mutex.Lock()
-	defer f.mutex.Unlock()
-
-	if len(f.hooks) == 0 {
-		return f.defaultHook
-	}
-
-	hook := f.hooks[0]
-	f.hooks = f.hooks[1:]
-	return hook
-}
-
-func (f *StubWorldExecCmdCombinedOutputFunc) appendCall(r0 StubWorldExecCmdCombinedOutputFuncCall) {
-	f.mutex.Lock()
-	f.history = append(f.history, r0)
-	f.mutex.Unlock()
-}
-
-// History returns a sequence of StubWorldExecCmdCombinedOutputFuncCall
-// objects describing the invocations of this function.
-func (f *StubWorldExecCmdCombinedOutputFunc) History() []StubWorldExecCmdCombinedOutputFuncCall {
-	f.mutex.Lock()
-	history := make([]StubWorldExecCmdCombinedOutputFuncCall, len(f.history))
-	copy(history, f.history)
-	f.mutex.Unlock()
-
-	return history
-}
-
-// StubWorldExecCmdCombinedOutputFuncCall is an object that describes an
-// invocation of method CombinedOutput on an instance of
-// MockStubWorldExecCmd.
-type StubWorldExecCmdCombinedOutputFuncCall struct {
-	// Result0 is the value of the 1st result returned from this method
-	// invocation.
-	Result0 []byte
-	// Result1 is the value of the 2nd result returned from this method
-	// invocation.
-	Result1 error
-}
-
-// Args returns an interface slice containing the arguments of this
-// invocation.
-func (c StubWorldExecCmdCombinedOutputFuncCall) Args() []interface{} {
-	return []interface{}{}
-}
-
-// Results returns an interface slice containing the results of this
-// invocation.
-func (c StubWorldExecCmdCombinedOutputFuncCall) Results() []interface{} {
-	return []interface{}{c.Result0, c.Result1}
-}
-
-// StubWorldExecCmdOutputFunc describes the behavior when the Output method
-// of the parent MockStubWorldExecCmd instance is invoked.
-type StubWorldExecCmdOutputFunc struct {
-	defaultHook func() ([]byte, error)
-	hooks       []func() ([]byte, error)
-	history     []StubWorldExecCmdOutputFuncCall
-	mutex       sync.Mutex
-}
-
-// Output delegates to the next hook function in the queue and stores the
-// parameter and result values of this invocation.
-func (m *MockStubWorldExecCmd) Output() ([]byte, error) {
-	r0, r1 := m.OutputFunc.nextHook()()
-	m.OutputFunc.appendCall(StubWorldExecCmdOutputFuncCall{r0, r1})
-	return r0, r1
-}
-
-// SetDefaultHook sets function that is called when the Output method of the
-// parent MockStubWorldExecCmd instance is invoked and the hook queue is
-// empty.
-func (f *StubWorldExecCmdOutputFunc) SetDefaultHook(hook func() ([]byte, error)) {
-	f.defaultHook = hook
-}
-
-// PushHook adds a function to the end of hook queue. Each invocation of the
-// Output method of the parent MockStubWorldExecCmd instance invokes the
-// hook at the front of the queue and discards it. After the queue is empty,
-// the default hook function is invoked for any future action.
-func (f *StubWorldExecCmdOutputFunc) PushHook(hook func() ([]byte, error)) {
-	f.mutex.Lock()
-	f.hooks = append(f.hooks, hook)
-	f.mutex.Unlock()
-}
-
-// SetDefaultReturn calls SetDefaultHook with a function that returns the
-// given values.
-func (f *StubWorldExecCmdOutputFunc) SetDefaultReturn(r0 []byte, r1 error) {
-	f.SetDefaultHook(func() ([]byte, error) {
-		return r0, r1
-	})
-}
-
-// PushReturn calls PushHook with a function that returns the given values.
-func (f *StubWorldExecCmdOutputFunc) PushReturn(r0 []byte, r1 error) {
-	f.PushHook(func() ([]byte, error) {
-		return r0, r1
-	})
-}
-
-func (f *StubWorldExecCmdOutputFunc) nextHook() func() ([]byte, error) {
-	f.mutex.Lock()
-	defer f.mutex.Unlock()
-
-	if len(f.hooks) == 0 {
-		return f.defaultHook
-	}
-
-	hook := f.hooks[0]
-	f.hooks = f.hooks[1:]
-	return hook
-}
-
-func (f *StubWorldExecCmdOutputFunc) appendCall(r0 StubWorldExecCmdOutputFuncCall) {
-	f.mutex.Lock()
-	f.history = append(f.history, r0)
-	f.mutex.Unlock()
-}
-
-// History returns a sequence of StubWorldExecCmdOutputFuncCall objects
-// describing the invocations of this function.
-func (f *StubWorldExecCmdOutputFunc) History() []StubWorldExecCmdOutputFuncCall {
-	f.mutex.Lock()
-	history := make([]StubWorldExecCmdOutputFuncCall, len(f.history))
-	copy(history, f.history)
-	f.mutex.Unlock()
-
-	return history
-}
-
-// StubWorldExecCmdOutputFuncCall is an object that describes an invocation
-// of method Output on an instance of MockStubWorldExecCmd.
-type StubWorldExecCmdOutputFuncCall struct {
-	// Result0 is the value of the 1st result returned from this method
-	// invocation.
-	Result0 []byte
-	// Result1 is the value of the 2nd result returned from this method
-	// invocation.
-	Result1 error
-}
-
-// Args returns an interface slice containing the arguments of this
-// invocation.
-func (c StubWorldExecCmdOutputFuncCall) Args() []interface{} {
-	return []interface{}{}
-}
-
-// Results returns an interface slice containing the results of this
-// invocation.
-func (c StubWorldExecCmdOutputFuncCall) Results() []interface{} {
-	return []interface{}{c.Result0, c.Result1}
-}
-
-// StubWorldExecCmdRunFunc describes the behavior when the Run method of the
-// parent MockStubWorldExecCmd instance is invoked.
-type StubWorldExecCmdRunFunc struct {
-	defaultHook func() error
-	hooks       []func() error
-	history     []StubWorldExecCmdRunFuncCall
-	mutex       sync.Mutex
-}
-
-// Run delegates to the next hook function in the queue and stores the
-// parameter and result values of this invocation.
-func (m *MockStubWorldExecCmd) Run() error {
-	r0 := m.RunFunc.nextHook()()
-	m.RunFunc.appendCall(StubWorldExecCmdRunFuncCall{r0})
-	return r0
-}
-
-// SetDefaultHook sets function that is called when the Run method of the
-// parent MockStubWorldExecCmd instance is invoked and the hook queue is
-// empty.
-func (f *StubWorldExecCmdRunFunc) SetDefaultHook(hook func() error) {
-	f.defaultHook = hook
-}
-
-// PushHook adds a function to the end of hook queue. Each invocation of the
-// Run method of the parent MockStubWorldExecCmd instance invokes the hook
-// at the front of the queue and discards it. After the queue is empty, the
-// default hook function is invoked for any future action.
-func (f *StubWorldExecCmdRunFunc) PushHook(hook func() error) {
-	f.mutex.Lock()
-	f.hooks = append(f.hooks, hook)
-	f.mutex.Unlock()
-}
-
-// SetDefaultReturn calls SetDefaultHook with a function that returns the
-// given values.
-func (f *StubWorldExecCmdRunFunc) SetDefaultReturn(r0 error) {
-	f.SetDefaultHook(func() error {
-		return r0
-	})
-}
-
-// PushReturn calls PushHook with a function that returns the given values.
-func (f *StubWorldExecCmdRunFunc) PushReturn(r0 error) {
-	f.PushHook(func() error {
-		return r0
-	})
-}
-
-func (f *StubWorldExecCmdRunFunc) nextHook() func() error {
-	f.mutex.Lock()
-	defer f.mutex.Unlock()
-
-	if len(f.hooks) == 0 {
-		return f.defaultHook
-	}
-
-	hook := f.hooks[0]
-	f.hooks = f.hooks[1:]
-	return hook
-}
-
-func (f *StubWorldExecCmdRunFunc) appendCall(r0 StubWorldExecCmdRunFuncCall) {
-	f.mutex.Lock()
-	f.history = append(f.history, r0)
-	f.mutex.Unlock()
-}
-
-// History returns a sequence of StubWorldExecCmdRunFuncCall objects
-// describing the invocations of this function.
-func (f *StubWorldExecCmdRunFunc) History() []StubWorldExecCmdRunFuncCall {
-	f.mutex.Lock()
-	history := make([]StubWorldExecCmdRunFuncCall, len(f.history))
-	copy(history, f.history)
-	f.mutex.Unlock()
-
-	return history
-}
-
-// StubWorldExecCmdRunFuncCall is an object that describes an invocation of
-// method Run on an instance of MockStubWorldExecCmd.
-type StubWorldExecCmdRunFuncCall struct {
-	// Result0 is the value of the 1st result returned from this method
-	// invocation.
-	Result0 error
-}
-
-// Args returns an interface slice containing the arguments of this
-// invocation.
-func (c StubWorldExecCmdRunFuncCall) Args() []interface{} {
-	return []interface{}{}
-}
-
-// Results returns an interface slice containing the results of this
-// invocation.
-func (c StubWorldExecCmdRunFuncCall) Results() []interface{} {
-	return []interface{}{c.Result0}
 }
 
 // MockStubWorldOsFile is a mock implementation of the WorldOsFile interface

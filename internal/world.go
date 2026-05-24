@@ -1,5 +1,4 @@
-//go:generate mise run mockgen
-//go:generate mise run go-mockgen -i World -i WorldExecCmd -i WorldOsFile
+//go:generate mise run go-mockgen -i World -i WorldOsFile
 
 //nolint:godoclint,revive // Thin wrappers over standard library functions.
 package internal
@@ -11,20 +10,19 @@ import (
 
 // World abstracts OS and exec dependencies for testability.
 type World interface {
-	ExecCommand(name string, args ...string) WorldExecCmd
+	Mountpoint(dir string) error
+	MountBPF(fstype, target string) ([]byte, error)
+	BpftoolProgLoadAll(bpfObjPath, bpffs, mapsDir string) ([]byte, error)
+	BpftoolCgroupAttach(cgroup, attachType, progPin string) error
+	BpftoolCgroupDetach(cgroup, attachType, progPin string) error
+	BpftoolMapUpdate(args ...string) error
+	BpftoolCgroupShow(cgroup string) ([]byte, error)
 	OsCreateTemp(dir, pattern string) (WorldOsFile, error)
 	OsGeteuid() int
 	OsMkdirAll(path string, perm os.FileMode) error
 	OsRemove(name string) error
 	OsRemoveAll(path string) error
 	OsStat(name string) (os.FileInfo, error)
-}
-
-// WorldExecCmd abstracts the result of an executed command.
-type WorldExecCmd interface {
-	CombinedOutput() ([]byte, error)
-	Output() ([]byte, error)
-	Run() error
 }
 
 // WorldOsFile allows mocking [os.File] operations in tests.
@@ -37,8 +35,32 @@ type WorldOsFile interface {
 // RealWorld implements World with real OS and exec calls.
 type RealWorld struct{}
 
-func (RealWorld) ExecCommand(name string, args ...string) WorldExecCmd {
-	return exec.Command(name, args...) //nolint:gosec,noctx // False positive; timeout not needed.
+func (RealWorld) Mountpoint(dir string) error {
+	return exec.Command("mountpoint", "-q", dir).Run() //nolint:gosec,noctx // False positive; timeout not needed.
+}
+
+func (RealWorld) MountBPF(fstype, target string) ([]byte, error) {
+	return exec.Command("mount", "-t", "bpf", "bpf", target).CombinedOutput() //nolint:gosec,noctx // False positive; timeout not needed.
+}
+
+func (RealWorld) BpftoolProgLoadAll(bpfObjPath, bpffs, mapsDir string) ([]byte, error) {
+	return exec.Command("bpftool", "prog", "loadall", bpfObjPath, bpffs, "pinmaps", mapsDir).CombinedOutput() //nolint:gosec,noctx // False positive; timeout not needed.
+}
+
+func (RealWorld) BpftoolCgroupAttach(cgroup, attachType, progPin string) error {
+	return exec.Command("bpftool", "cgroup", "attach", cgroup, attachType, "pinned", progPin).Run() //nolint:gosec,noctx // False positive; timeout not needed.
+}
+
+func (RealWorld) BpftoolCgroupDetach(cgroup, attachType, progPin string) error {
+	return exec.Command("bpftool", "cgroup", "detach", cgroup, attachType, "pinned", progPin).Run() //nolint:gosec,noctx // False positive; timeout not needed.
+}
+
+func (RealWorld) BpftoolMapUpdate(args ...string) error {
+	return exec.Command("bpftool", args...).Run() //nolint:gosec,noctx // False positive; timeout not needed.
+}
+
+func (RealWorld) BpftoolCgroupShow(cgroup string) ([]byte, error) {
+	return exec.Command("bpftool", "--json", "cgroup", "show", cgroup).Output() //nolint:gosec,noctx // False positive; timeout not needed.
 }
 
 func (RealWorld) OsCreateTemp(dir, pattern string) (WorldOsFile, error) {
