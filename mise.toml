@@ -8,10 +8,14 @@ go = 'latest'
 #--- Generate
 # MockGen generates mock implementations of Go interfaces.
 'go:go.uber.org/mock/mockgen' = 'latest'
+# A mock interface code generator (a fork of github.com/derision-test/go-mockgen).
+'go:github.com/unknwon/go-mockgen/cmd/go-mockgen' = 'latest'
 
 #--- Format
 # Opinionated Code Formatter.
 prettier = 'latest'
+# goimports updates Go import lines (used by go-mockgen after generation).
+'go:golang.org/x/tools/cmd/goimports' = 'latest'
 
 #--- Lint
 # Static checker for GitHub Actions workflow files.

@@ -333,7 +333,6 @@ func testDoErrors(t *testing.T, f func(t *stubAppTest) error) {
 		t := newStubAppTest(tt)
 		t.World.Mounted = false
 		t.World.Stub.ExecMountpoint.Returns(false)
-		t.World.Stub.OsMkdirAll.Default()
 		t.World.Stub.ExecMount.Fail(errStubMountFailed)
 		t.Err(f(t), errStubMountFailed)
 	})

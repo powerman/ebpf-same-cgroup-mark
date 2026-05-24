@@ -1,4 +1,5 @@
 //go:generate mise run mockgen
+//go:generate go-mockgen -f --for-test --prefix gen -o ../test/internal/mockgen.$GOFILE -i World -i WorldExecCmd -i WorldOsFile .
 
 //nolint:godoclint,revive // Thin wrappers over standard library functions.
 package internal
