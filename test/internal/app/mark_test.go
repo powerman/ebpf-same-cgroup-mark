@@ -1,11 +1,11 @@
-package internal_test
+package app_test
 
 import (
 	"testing"
 
 	"github.com/powerman/check"
 
-	"github.com/powerman/ebpf-same-cgroup-mark/internal"
+	"github.com/powerman/ebpf-same-cgroup-mark/internal/app"
 )
 
 func TestMarkUnmarshalText(tt *testing.T) {
@@ -13,7 +13,7 @@ func TestMarkUnmarshalText(tt *testing.T) {
 
 	tests := []struct {
 		input   string
-		want    internal.Mark
+		want    app.Mark
 		wantErr string
 	}{
 		{"0", 0, ""},
@@ -33,7 +33,7 @@ func TestMarkUnmarshalText(tt *testing.T) {
 		tt.Run(tc.input, func(tt *testing.T) {
 			tt.Parallel()
 			t := check.T(tt).MustAll()
-			var m internal.Mark
+			var m app.Mark
 			err := m.UnmarshalText([]byte(tc.input))
 			if tc.wantErr != "" {
 				t.Match(err, tc.wantErr)
@@ -50,7 +50,7 @@ func TestMarkToLE(tt *testing.T) {
 	t := check.T(tt).MustAll()
 
 	tests := []struct {
-		mark internal.Mark
+		mark app.Mark
 		want [4]string
 	}{
 		{0x00100000, [4]string{"00", "00", "10", "00"}},

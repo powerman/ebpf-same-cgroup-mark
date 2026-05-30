@@ -1,6 +1,11 @@
-package internal
+// Package cli provides the command-line interface and wiring.
+package cli
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/powerman/ebpf-same-cgroup-mark/internal/app"
+)
 
 // CLI defines the command-line interface for the program.
 type CLI struct {
@@ -10,11 +15,11 @@ type CLI struct {
 
 // LoadCmd loads and attaches the eBPF program.
 type LoadCmd struct {
-	Mark *Mark `help:"Mark mask in hexadecimal (e.g. 0x40000000)." short:"m"`
+	Mark *app.Mark `help:"Mark mask in hexadecimal (e.g. 0x40000000)." short:"m"`
 }
 
 // Run executes the LoadCmd.
-func (c *LoadCmd) Run(a App) error {
+func (c *LoadCmd) Run(a app.App) error {
 	err := a.Load()
 
 	if err == nil && c.Mark != nil {
@@ -31,6 +36,6 @@ func (c *LoadCmd) Run(a App) error {
 type UnloadCmd struct{}
 
 // Run executes the UnloadCmd.
-func (*UnloadCmd) Run(a App) error {
+func (*UnloadCmd) Run(a app.App) error {
 	return a.Unload()
 }

@@ -6,7 +6,8 @@ import (
 
 	"github.com/alecthomas/kong"
 
-	"github.com/powerman/ebpf-same-cgroup-mark/internal"
+	"github.com/powerman/ebpf-same-cgroup-mark/internal/app"
+	"github.com/powerman/ebpf-same-cgroup-mark/internal/cli"
 )
 
 // BPFObj is the embedded eBPF object file compiled from same-cgroup-mark.bpf.c.
@@ -15,11 +16,11 @@ import (
 var BPFObj []byte
 
 func main() {
-	var cli internal.CLI
-	ctx := kong.Parse(&cli,
+	var cmd cli.CLI
+	ctx := kong.Parse(&cmd,
 		kong.Description("Set SO_MARK on TCP sockets in the same cgroup."),
 		kong.ShortUsageOnError(),
 	)
-	ctx.BindTo(internal.NewApp(internal.RealWorld{}, BPFObj), (*internal.App)(nil))
+	ctx.BindTo(cli.NewApp(BPFObj), (*app.App)(nil))
 	ctx.FatalIfErrorf(ctx.Run())
 }

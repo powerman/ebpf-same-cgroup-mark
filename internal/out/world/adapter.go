@@ -1,38 +1,14 @@
-//go:generate mise run go-mockgen -i World -i WorldOsFile
-
 //nolint:godoclint,revive // Thin wrappers over standard library functions.
-package internal
+package world
 
 import (
 	"os"
 	"os/exec"
+
+	"github.com/powerman/ebpf-same-cgroup-mark/internal/app"
 )
 
-// World abstracts OS and exec dependencies for testability.
-type World interface {
-	Mountpoint(dir string) error
-	MountBPF(fstype, target string) ([]byte, error)
-	BpftoolProgLoadAll(bpfObjPath, bpffs, mapsDir string) ([]byte, error)
-	BpftoolCgroupAttach(cgroup, attachType, progPin string) error
-	BpftoolCgroupDetach(cgroup, attachType, progPin string) error
-	BpftoolMapUpdate(args ...string) error
-	BpftoolCgroupShow(cgroup string) ([]byte, error)
-	OsCreateTemp(dir, pattern string) (WorldOsFile, error)
-	OsGeteuid() int
-	OsMkdirAll(path string, perm os.FileMode) error
-	OsRemove(name string) error
-	OsRemoveAll(path string) error
-	OsStat(name string) (os.FileInfo, error)
-}
-
-// WorldOsFile allows mocking [os.File] operations in tests.
-type WorldOsFile interface {
-	Close() error
-	Name() string
-	Write(p []byte) (n int, err error)
-}
-
-// RealWorld implements World with real OS and exec calls.
+// RealWorld implements [app.World] with real OS and exec calls.
 type RealWorld struct{}
 
 func (RealWorld) Mountpoint(dir string) error {
@@ -63,7 +39,7 @@ func (RealWorld) BpftoolCgroupShow(cgroup string) ([]byte, error) {
 	return exec.Command("bpftool", "--json", "cgroup", "show", cgroup).Output() //nolint:gosec,noctx // False positive; timeout not needed.
 }
 
-func (RealWorld) OsCreateTemp(dir, pattern string) (WorldOsFile, error) {
+func (RealWorld) OsCreateTemp(dir, pattern string) (app.WorldOsFile, error) {
 	return os.CreateTemp(dir, pattern)
 }
 

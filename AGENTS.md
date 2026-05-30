@@ -73,6 +73,10 @@ Use these commands for corresponding tasks:
   The handler parses its own flags and delegates to App.
 - Minimize `main.go`:
   define the CLI struct, parse with Kong, call `ctx.Run(app)`.
+- CLI handling code is placed in `internal/cli` rather than `package main`.
+  This is a deliberate architectural choice:
+  it enables importing and testing this code from the separate `test/` Go module,
+  which is not possible with a root-level `package main`.
 
 ### Coding Standards
 
@@ -152,7 +156,7 @@ NOTE: The above example does not mean you should break into very short lines as 
   because stateful mocks are expected to be relatively rare.
 
   ```text
-  //go:generate mise run go-mockgen -i Интерфейс1 -i …
+  //go:generate mise run go-mockgen --no-test-pkg -i Интерфейс1 -i …
   ```
 
 ### Gotchas

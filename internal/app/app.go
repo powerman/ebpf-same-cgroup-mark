@@ -1,7 +1,5 @@
-//go:generate mise run mockgen
-
-// Package internal provides the eBPF program loader and CLI commands.
-package internal
+// Package app provides the eBPF program loader implementation.
+package app
 
 import (
 	"encoding/json"
@@ -13,17 +11,8 @@ import (
 	"slices"
 )
 
-// Constants.
-const (
-	BPFMode    = fs.FileMode(0o750)
-	BPFRoot    = "/sys/fs/bpf"
-	BPFDir     = BPFRoot + "/same-cgroup-mark"
-	CgroupRoot = "/sys/fs/cgroup"
-)
-
-// Errors.
+// Internal errors.
 var (
-	ErrMustBeRoot   = errors.New("must be run as root")
 	errBPFDirExists = errors.New("BPF pin directory still exists")
 	errProgAttached = errors.New("BPF program still attached to cgroup")
 )
@@ -44,13 +33,6 @@ func CgroupAttaches() []CgroupAttach {
 	}
 }
 
-// App is the main application.
-type App interface {
-	Load() error
-	SetMark(m Mark) error
-	Unload() error
-}
-
 type app struct {
 	World
 
@@ -58,7 +40,9 @@ type app struct {
 }
 
 // NewApp creates a new App with the given World.
-func NewApp(world World, bpfObj []byte) *app { //nolint:revive // Used for mock vs real dependency injection.
+//
+//nolint:revive // Returning unexported type is intentional.
+func NewApp(world World, bpfObj []byte) *app {
 	return &app{World: world, bpfObj: bpfObj}
 }
 
