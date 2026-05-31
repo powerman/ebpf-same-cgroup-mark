@@ -1,6 +1,6 @@
 //go:generate mise run mockgen --no-test-pkg
 //go:generate mise run go-mockgen --no-test-pkg -i World -i WorldOsFile
-package app
+package internal
 
 import (
 	"errors"
@@ -27,8 +27,6 @@ var (
 )
 
 // App is the main application.
-//
-//nolint:iface // Used as a port by external packages.
 type App interface {
 	Load() error
 	SetMark(m Mark) error

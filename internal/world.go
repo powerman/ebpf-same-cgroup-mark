@@ -1,14 +1,12 @@
 //nolint:godoclint,revive // Thin wrappers over standard library functions.
-package world
+package internal
 
 import (
 	"os"
 	"os/exec"
-
-	"github.com/powerman/ebpf-same-cgroup-mark/internal/app"
 )
 
-// RealWorld implements [app.World] with real OS and exec calls.
+// RealWorld implements [World] with real OS and exec calls.
 type RealWorld struct{}
 
 func (RealWorld) Mountpoint(dir string) error {
@@ -39,7 +37,7 @@ func (RealWorld) BpftoolCgroupShow(cgroup string) ([]byte, error) {
 	return exec.Command("bpftool", "--json", "cgroup", "show", cgroup).Output() //nolint:gosec,noctx // False positive; timeout not needed.
 }
 
-func (RealWorld) OsCreateTemp(dir, pattern string) (app.WorldOsFile, error) {
+func (RealWorld) OsCreateTemp(dir, pattern string) (WorldOsFile, error) {
 	return os.CreateTemp(dir, pattern)
 }
 

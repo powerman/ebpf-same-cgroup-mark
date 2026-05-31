@@ -1,5 +1,5 @@
-// Package app provides the eBPF program loader implementation.
-package app
+// Package internal provides the eBPF program loader implementation.
+package internal
 
 import (
 	"encoding/json"
