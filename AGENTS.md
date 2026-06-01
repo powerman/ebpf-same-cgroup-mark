@@ -156,7 +156,7 @@ NOTE: The above example does not mean you should break into very short lines as 
   because stateful mocks are expected to be relatively rare.
 
   ```text
-  //go:generate mise run go-mockgen --no-test-pkg -i Интерфейс1 -i …
+  //go:generate mise run go-mockgen -i Интерфейс1 -i …
   ```
 
 ### Gotchas

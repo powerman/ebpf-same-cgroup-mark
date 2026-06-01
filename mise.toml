@@ -148,32 +148,23 @@ go tool cover -html=../{{vars.cover}} -o ../{{vars.cover}}.html
 
 # Generate Go mocks in /test submodule using mirrored directory structure.
 [tasks.mockgen]
-usage = '''
-flag "--no-test-pkg" help="Omit _test suffix from the generated package and file name"
-'''
 hide = true
 dir = "{{cwd}}"
 run = '''
 MODROOT=$(dirname "$(go env GOMOD)")
 PKGREL=$(realpath --relative-to="$MODROOT" .)
-suffix=; [ -n "$usage_no_test_pkg" ] || suffix=_test
-mockgen -package="$(basename "$PKGREL")${suffix}" -source="$GOFILE" \
-    -destination="$(realpath --relative-to=. "$MODROOT/test/$PKGREL")/mock.${GOFILE%%.go}${suffix}.go"
+mockgen -package="$(basename "$PKGREL")" -source="$GOFILE" \
+    -destination="$(realpath --relative-to=. "$MODROOT/test/$PKGREL")/mock.${GOFILE%%.go}.go"
 '''
 
 [tasks.go-mockgen]
-usage = '''
-flag "--no-test-pkg" help="Omit _test suffix from the generated package and file name"
-arg "..." help="Extra args passed through to go-mockgen"
-'''
 hide = true
 dir = "{{cwd}}"
 run = '''
 MODROOT=$(dirname "$(go env GOMOD)")
 PKGREL=$(realpath --relative-to="$MODROOT" .)
-suffix=; [ -n "$usage_no_test_pkg" ] || suffix=_test
-go-mockgen -o "$(realpath --relative-to=. "$MODROOT/test/$PKGREL")/stub.${GOFILE%%.go}${suffix}.go" \
-    -f --prefix Stub ${suffix:+--for-test} ${usage_} .
+go-mockgen -o "$(realpath --relative-to=. "$MODROOT/test/$PKGREL")/stub.${GOFILE%%.go}.go" \
+    -f --prefix Stub "$@" .
 '''
 
 [tasks.cachedir]

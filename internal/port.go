@@ -1,5 +1,5 @@
-//go:generate mise run mockgen --no-test-pkg
-//go:generate mise run go-mockgen --no-test-pkg -i World -i WorldOsFile
+//go:generate mise run mockgen
+//go:generate mise run go-mockgen -i World -i WorldOsFile
 package internal
 
 import (
