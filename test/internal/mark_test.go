@@ -32,7 +32,7 @@ func TestMarkUnmarshalText(tt *testing.T) {
 	for _, tc := range tests {
 		tt.Run(tc.input, func(tt *testing.T) {
 			tt.Parallel()
-			t := check.T(tt).MustAll()
+			t := check.Must(tt)
 			var m internal.Mark
 			err := m.UnmarshalText([]byte(tc.input))
 			if tc.wantErr != "" {
@@ -47,7 +47,7 @@ func TestMarkUnmarshalText(tt *testing.T) {
 
 func TestMarkToLE(tt *testing.T) {
 	tt.Parallel()
-	t := check.T(tt).MustAll()
+	t := check.Must(tt)
 
 	tests := []struct {
 		mark internal.Mark

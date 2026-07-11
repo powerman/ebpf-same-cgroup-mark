@@ -156,7 +156,7 @@ func newWorld() *World {
 }
 
 type AppTest struct {
-	*check.C
+	*check.TB
 
 	World *World
 	App   internal.App
@@ -164,7 +164,7 @@ type AppTest struct {
 
 func newAppTest(tt *testing.T) *AppTest {
 	tt.Helper()
-	t := &AppTest{C: check.T(tt).MustAll()}
+	t := &AppTest{TB: check.Must(tt)}
 	t.World = newWorld()
 	t.App = internal.NewApp(t.World, []byte("test-bpf-object"))
 	return t

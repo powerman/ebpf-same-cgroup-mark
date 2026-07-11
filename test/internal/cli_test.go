@@ -19,7 +19,7 @@ var (
 )
 
 // kongParse parses command-line arguments using Kong for testing.
-func kongParse(t *check.C, args ...string) (ctx *kong.Context, cmd internal.CLI, err error) {
+func kongParse(t *check.TB, args ...string) (ctx *kong.Context, cmd internal.CLI, err error) {
 	t.Helper()
 	k, err := kong.New(&cmd,
 		kong.Writers(io.Discard, io.Discard),
@@ -33,7 +33,7 @@ func kongParse(t *check.C, args ...string) (ctx *kong.Context, cmd internal.CLI,
 }
 
 // kongRun parses command-line arguments using Kong, binds the App, and runs the command.
-func kongRun(t *check.C, a internal.App, args ...string) error {
+func kongRun(t *check.TB, a internal.App, args ...string) error {
 	t.Helper()
 	ctx, _, err := kongParse(t, args...)
 	t.Nil(err)
@@ -46,7 +46,7 @@ func TestLoadCmd_Mark(t *testing.T) {
 
 	t.Run("NotProvided", func(tt *testing.T) {
 		tt.Parallel()
-		t := check.T(tt).MustAll()
+		t := check.Must(tt)
 		_, cmd, err := kongParse(t, "load")
 		t.Nil(err)
 		t.Nil(cmd.Load.Mark)
@@ -54,7 +54,7 @@ func TestLoadCmd_Mark(t *testing.T) {
 
 	t.Run("Valid", func(tt *testing.T) {
 		tt.Parallel()
-		t := check.T(tt).MustAll()
+		t := check.Must(tt)
 		_, cmd, err := kongParse(t, "load", "--mark", "0x20000000")
 		t.Nil(err)
 		t.DeepEqual(cmd.Load.Mark, new(internal.Mark(0x20000000)))
@@ -62,7 +62,7 @@ func TestLoadCmd_Mark(t *testing.T) {
 
 	t.Run("Invalid", func(tt *testing.T) {
 		tt.Parallel()
-		t := check.T(tt).MustAll()
+		t := check.Must(tt)
 		_, _, err := kongParse(t, "load", "--mark", "invalid")
 		t.Match(err, "invalid mark value")
 	})
@@ -139,7 +139,7 @@ func TestCmd(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(tt *testing.T) {
 			tt.Parallel()
-			t := check.T(tt).MustAll()
+			t := check.Must(tt)
 			a := port.NewMockApp(gomock.NewController(t))
 			tc.expect(a)
 			err := kongRun(t, a, tc.args...)
