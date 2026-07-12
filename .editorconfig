@@ -21,6 +21,9 @@ indent_size = 2
 indent_style = tab
 indent_size = unset
 
+[*.proto]
+indent_size = 2
+
 [{*.c,*.h}]
 indent_style = tab
 indent_size = unset
