@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-07-12
+
+### 📦️ Dependencies
+
+- **(deps)** Update github.com/powerman/check v1.9.1 -> v1.13.0 by @powerman in [f33233e]
+
+[0.3.1]: https://github.com/powerman/ebpf-same-cgroup-mark/compare/v0.3.0..v0.3.1
+[f33233e]: https://github.com/powerman/ebpf-same-cgroup-mark/commit/f33233e1a4ec65d0f629fb0ed7f1546b213e0232
+
 ## [0.3.0] - 2026-05-24
 
 ### 🔔 Changed
