@@ -4,7 +4,6 @@
 [![License GPL-2.0](https://img.shields.io/badge/license-GPL--2.0-royalblue.svg)](LICENSE-GPL-2.0)
 [![Test](https://img.shields.io/github/actions/workflow/status/powerman/ebpf-same-cgroup-mark/test.yml?label=test)](https://github.com/powerman/ebpf-same-cgroup-mark/actions/workflows/test.yml)
 [![Coverage Status](https://raw.githubusercontent.com/powerman/ebpf-same-cgroup-mark/gh-badges/coverage.svg)](https://github.com/powerman/ebpf-same-cgroup-mark/actions/workflows/test.yml)
-[![Go Report Card](https://goreportcard.com/badge/github.com/powerman/ebpf-same-cgroup-mark)](https://goreportcard.com/report/github.com/powerman/ebpf-same-cgroup-mark)
 [![Release](https://img.shields.io/github/v/release/powerman/ebpf-same-cgroup-mark?color=blue)](https://github.com/powerman/ebpf-same-cgroup-mark/releases/latest)
 
 ![Linux | amd64 arm64](https://img.shields.io/badge/Linux-amd64%20arm64-royalblue)
