@@ -44,7 +44,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             clang llvm libbpf-dev
 
-      - uses: jdx/mise-action@v4
+      - uses: jdx/mise-action@v4.2.3
       - run: git reset --hard # Work around https://github.com/jdx/mise/discussions/8270.
 
       - name: Generate BPF object
