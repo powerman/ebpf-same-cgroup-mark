@@ -2,4 +2,4 @@ module github.com/powerman/ebpf-same-cgroup-mark
 
 go 1.26
 
-require github.com/alecthomas/kong v1.15.0
+require github.com/alecthomas/kong v1.16.1
