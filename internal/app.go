@@ -41,7 +41,7 @@ type app struct {
 
 // NewApp creates a new App with the given World.
 //
-//nolint:revive // Returning unexported type is intentional.
+
 func NewApp(world World, bpfObj []byte) *app {
 	return &app{World: world, bpfObj: bpfObj}
 }
