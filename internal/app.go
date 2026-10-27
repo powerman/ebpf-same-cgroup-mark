@@ -40,8 +40,6 @@ type app struct {
 }
 
 // NewApp creates a new App with the given World.
-//
-
 func NewApp(world World, bpfObj []byte) *app {
 	return &app{World: world, bpfObj: bpfObj}
 }
