@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-10-28
+
+### 🔔 Changed
+
+- Require Go 1.27 by @powerman in [021b444]
+
+### 🐛 Fixed
+
+- Build with Go 1.27.3 by @powerman in [9896ab7]
+
+### 📦️ Dependencies
+
+- **(deps)** Update github.com/powerman/check v1.9.1 -> v1.13.0 by @powerman in [f33233e]
+- **(deps)** Upgrade go and golangci-lint by @powerman in [2d5a274]
+- **(deps)** Upgrade go modules by @powerman in [d87114a]
+- **(deps)** Upgrade go to 1.27 and kong to 1.16.1 by @powerman in [1433b9d]
+- **(deps)** Upgrade go and golangci-lint by @powerman in [f63f7d2]
+- **(deps)** Switch go-mockgen to github.com/powerman/go-mockgen/v2 by @powerman in [79f077f]
+- **(deps)** Mise up by @powerman in [c46ecc2]
+
+[0.4.0]: https://github.com/powerman/ebpf-same-cgroup-mark/compare/v0.3.0..v0.4.0
+[f33233e]: https://github.com/powerman/ebpf-same-cgroup-mark/commit/f33233e1a4ec65d0f629fb0ed7f1546b213e0232
+[2d5a274]: https://github.com/powerman/ebpf-same-cgroup-mark/commit/2d5a274647bb45a307e6f38e614e7e747bcca4cc
+[d87114a]: https://github.com/powerman/ebpf-same-cgroup-mark/commit/d87114a9731858a1c656d3215b8fff529429ed99
+[1433b9d]: https://github.com/powerman/ebpf-same-cgroup-mark/commit/1433b9d7abe6aeeb46a130abac601ba1951e950a
+[f63f7d2]: https://github.com/powerman/ebpf-same-cgroup-mark/commit/f63f7d2824eee01252981baa1cdf3dc4ed9e9082
+[9896ab7]: https://github.com/powerman/ebpf-same-cgroup-mark/commit/9896ab7a550292a2037a36e59e53234058e7950f
+[021b444]: https://github.com/powerman/ebpf-same-cgroup-mark/commit/021b44415a7f22613daf08ffa07b5f3cdc5da2e8
+[79f077f]: https://github.com/powerman/ebpf-same-cgroup-mark/commit/79f077f246eb797d2f5fc308b0ad496cfbe8690d
+[c46ecc2]: https://github.com/powerman/ebpf-same-cgroup-mark/commit/c46ecc2082be60e3248005cf9bd0e50b791e6ebf
+
 ## [0.3.0] - 2026-05-24
 
 ### 🔔 Changed
