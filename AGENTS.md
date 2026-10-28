@@ -95,7 +95,7 @@ Use these commands for corresponding tasks:
   //go:generate mise run mockgen
   ```
 
-- Use [go-mockgen](https://github.com/unknwon/go-mockgen) for stateful fakes,
+- Use [go-mockgen](https://github.com/powerman/go-mockgen) for stateful fakes,
   when tests are clearer as world-state transitions than as long EXPECT() chains,
   especially when a dependency needs default behavior plus queued per-call overrides
   and optional post-hoc inspection of call history.

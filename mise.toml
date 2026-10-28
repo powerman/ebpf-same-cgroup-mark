@@ -15,7 +15,7 @@ go = 'latest'
 # MockGen generates mock implementations of Go interfaces.
 'go:go.uber.org/mock/mockgen' = 'latest'
 # A mock interface code generator (a fork of github.com/derision-test/go-mockgen).
-'go:github.com/unknwon/go-mockgen/cmd/go-mockgen' = 'latest'
+'go:github.com/powerman/go-mockgen/v2/cmd/go-mockgen' = 'latest'
 
 #--- Format
 # Opinionated Code Formatter.
